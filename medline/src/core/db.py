@@ -1,5 +1,12 @@
-import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-from sqlalchemy.ext.asyncio import create_async_engine
+from core.config import settings as app_settings
+
+engine = create_engine(app_settings.DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+
+def get_db():
+    with SessionLocal() as db:
+        yield db
