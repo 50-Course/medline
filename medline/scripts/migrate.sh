@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-if [ -z $'(ls -A migrations/versions/)']; then
+if [ -z $'(ls -A alembic/versions/)']; then
 	echo "No migrations file were found. Do you forget to commit them?"
 	exit 1
 fi
