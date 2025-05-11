@@ -1,12 +1,19 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from typing import Optional
 
-from .core.config import settings as app_settings
+from sqlalchemy import String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.schema import Column
 
-engine = create_engine(app_settings.DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+Base = declarative_base()
 
 
-def get_db():
-    with SessionLocal() as db:
-        yield db
+class Product(Base):
+    __tablename__ = "products"
+
+
+class Merchant(Base):
+    __tablename__ = "merchants"
+
+
+class Location(Base):
+    __tablename__ = "location"
