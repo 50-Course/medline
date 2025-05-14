@@ -40,3 +40,13 @@ So below is the website tabs accordingly:
   to the Link
 
 **Product Detailed Overview Listing Page (Listing Page, but more detailed)**
+
+- We should first, check for the Number of companies, that way we can pre-build (lazy create these companies in bulk operation - with minimal
+  data initially such as Name only - well that is all we can see initially).
+- Again, we do an initial check, if the <h1> category div tag, here it is (`h1.concept.left`) at the same time we should do a numbers of
+  companies check (using the div selector: `div.right.concept-counters`) - checking for the Tag text between the <span> child class in it.
+  if its greater than zero, we should asynchronous batch create the list of companies by scraping the company names from
+  the "Manufacturers" sidebar.
+
+  -- It would do so by, looping through (or finding) every <input> tags within the <ul> itemList class: `ul#itemList`, extract the Tag Text within
+  it and create a corresponding Manufactrer for it
