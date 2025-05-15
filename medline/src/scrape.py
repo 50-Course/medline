@@ -7,7 +7,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, NewType
 
 from playwright.sync_api import Browser, BrowserContext, ElementHandle
 from playwright.sync_api import Error as PlaywrightError
@@ -17,14 +17,18 @@ logger = logging.getLogger(__name__)
 
 url: str = "https://www.medicalexpo.com/"
 
+_headers: dict[str, Any] = {}
+
 USER_AGENT: str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:127.0) Gecko/20100101 Firefox/127.0"
 
-_headers: dict[str, Any] = {}
+HOMEPAGE_PRODUCTS_COLUMN_SELECTOR: str = "div.sc-19e28ua-1.eZHbVe"
 
 
 def scrape_url(
     url: str,
     headless: bool = False,
+    remote_debugging: bool = False,
+    debug: bool = False,
     slow_mo: int = 0,
     wait_for_load: int = 3000,
     to_excel: bool = False,
@@ -36,22 +40,34 @@ def scrape_url(
     """
     try:
         with sync_playwright() as p:
-            browser: Browser = p.firefox.launch(headless=headless, slow_mo=slow_mo)
-            ctx: BrowserContext = browser.new_context(user_agent=USER_AGENT)
+            browser: Browser = (
+                p.chromium.launch(headless=headless, slow_mo=slow_mo)
+                if not remote_debugging
+                else p.chromium.connect_over_cdp(
+                    "http://localhost:3001/", slow_mo=slow_mo
+                )
+            )
+            ctx: BrowserContext = browser.new_context()
 
             page = ctx.new_page()
 
-            page.goto(url, timeout=5000)
+            # page.goto(url, timeout=5000)
+            page.goto(url)
 
-            if wait_for_load > 0:
+            if debug and wait_for_load > 0:
                 page.wait_for_timeout(wait_for_load)
+
+            # logger.info("Checking for page response")
+            print("Checking for page response")
+
+            _dropdown_container: ElementHandle | None = page.query_selector(
+                HOMEPAGE_PRODUCTS_COLUMN_SELECTOR
+            )
 
             # TODO: we start performing actions in here
             # perhaps, an entrypoint function
-            with page.expect_response(
-                lambda response: response.status == 200 and response.url == url
-            ):
-                entrypoint(page)
+            if page.is_visible(HOMEPAGE_PRODUCTS_COLUMN_SELECTOR):
+                entrypoint(page, index=_dropdown_container)
 
                 # excel file are stored directly on host system if output dir is not specified
                 # TODO: write logic later - Lower priority
@@ -60,19 +76,22 @@ def scrape_url(
             # TODO: write logic later - Lower priority
 
     except (PlaywrightError, TimeoutError) as play_err:
-        logger.warning("Error scraping URL: ", str(play_err.message))
+        logger.warning("Error scraping URL: ", play_err)
 
 
-def entrypoint(page: Page) -> None:
+def entrypoint(page: Page, index: ElementHandle | None = None) -> None:
     """
     Peforms a set of operations taking the page as the input
     """
-    # we find the 'Product' dropdowns and scrape its category information recursively for both columns
-    page.wait_for_selector("div.sc-19e28ua-1.eZHbVe")
-    dropdown_container = page.query_selector("div.sc-19e28ua-1.eZHbVe")
 
-    if dropdown_container:
-        logger.info("We got here ..waiting for next steps...")
+    # we find the 'Product' dropdowns and scrape its category information recursively for both columns
+    if not index:
+        page.wait_for_selector(HOMEPAGE_PRODUCTS_COLUMN_SELECTOR)
+    else:
+        page.query_selector(HOMEPAGE_PRODUCTS_COLUMN_SELECTOR)
+
+    # logger.info("We got here ..waiting for next steps...")
+    print("We got here ..waiting for next steps...")
 
     # then we go into each product category listing (which is like a module index, a product catalog index) page, within a dropdown and scrape all information
     # keeping the heirachy in-tact
@@ -84,4 +103,4 @@ def entrypoint(page: Page) -> None:
 
 
 if __name__ == "__main__":
-    scrape_url(url, headless=True)
+    scrape_url(url, headless=False)
