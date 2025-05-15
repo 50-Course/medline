@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from playwright.sync_api import Browser, BrowserContext
+from playwright.sync_api import Browser, BrowserContext, ElementHandle
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, TimeoutError, sync_playwright
 
@@ -68,6 +68,11 @@ def entrypoint(page: Page) -> None:
     Peforms a set of operations taking the page as the input
     """
     # we find the 'Product' dropdowns and scrape its category information recursively for both columns
+    page.wait_for_selector("div.sc-19e28ua-1.eZHbVe")
+    dropdown_container = page.query_selector("div.sc-19e28ua-1.eZHbVe")
+
+    if dropdown_container:
+        logger.info("We got here ..waiting for next steps...")
 
     # then we go into each product category listing (which is like a module index, a product catalog index) page, within a dropdown and scrape all information
     # keeping the heirachy in-tact
@@ -76,3 +81,7 @@ def entrypoint(page: Page) -> None:
     # while sticking keeping heirachy in-place
 
     # then we finally click each 'Product' itself (which is now like Amazon page), then we scrape peculiar information - Images, product information, merchant information, tags, descriptions, and whatnots
+
+
+if __name__ == "__main__":
+    scrape_url(url, headless=True)
