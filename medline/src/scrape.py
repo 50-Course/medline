@@ -25,6 +25,7 @@ _headers: dict[str, Any] = {}
 def scrape_url(
     url: str,
     headless: bool = False,
+    slow_mo: int = 0,
     wait_for_load: int = 3000,
     to_excel: bool = False,
     output_dir: Path | None = None,
@@ -35,7 +36,7 @@ def scrape_url(
     """
     try:
         with sync_playwright() as p:
-            browser: Browser = p.firefox.launch(headless=headless)
+            browser: Browser = p.firefox.launch(headless=headless, slow_mo=slow_mo)
             ctx: BrowserContext = browser.new_context(user_agent=USER_AGENT)
 
             page = ctx.new_page()
@@ -62,7 +63,7 @@ def scrape_url(
         logger.warning("Error scraping URL: ", str(play_err.message))
 
 
-def entrypoint(page: Page):
+def entrypoint(page: Page) -> None:
     """
     Peforms a set of operations taking the page as the input
     """
