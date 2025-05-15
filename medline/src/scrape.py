@@ -176,8 +176,30 @@ def extract_dropdown_items():
     pass
 
 
-def scrape_product_listing_index():
-    pass
+def scrape_product_listing_index(
+    page: Page,
+    subcategory_name: str,
+    subcategory_url: str,
+    base_url: str = "https://www.medicalexpo.com",
+    storage_: Optional[_ResponseData] = None,
+    timeout: Optional[int] = 30000,
+) -> None:
+    """
+    Scrapes the product category index page -storing along relevant metadata
+    """
+    print(f"[INFO] Navigating to subcategory page: {subcategory_url}")
+    page.goto(subcategory_url, timeout=timeout)
+    page.wait_for_selector("h1#category", timeout=timeout)
+
+    page_heading = page.query_selector("h1#category").inner_text().strip()
+
+    # Lol, we know bad things happen we don't to mistakenly
+    # scape the wrong listing index
+    if page_heading.lower() != subcategory_name.lower():
+        print(
+            f"[WARN] Page Mismatch: Wrong page, perhaps? Expected '{subcategory_name}', got '{page_heading}'"
+        )
+        return
 
 
 def find_extract_product_overview_meta():
@@ -225,7 +247,7 @@ def extract_categories_from_homepage(
 
         categories.append({"section": section_name, "subcategories": subcategories})
 
-    print(categories)
+    # print(categories)
 
     if storage_ is not None:
         storage_["categories"] = categories
@@ -251,9 +273,7 @@ def entrypoint(page: Page, index: Optional[ElementHandle] = None) -> None:
     # then we go into each product category listing (which is like a module index, a product catalog index) page, within a dropdown and scrape all information
     # keeping the heirachy in-tact
     # for category in scraped_data.get("categories", []):
-    #     scrape_product_listing_index(
-    #         page, category_url=category[url], storage_=category
-    #     )
+    #     scrape_product_listing_index(page, subcategory_name=category, storage_=category)
 
     # then we proceed to go into the respective 'Product' Index Detailed Overview Listing page, all available products per index
     # while sticking keeping heirachy in-place
