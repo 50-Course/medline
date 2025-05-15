@@ -75,6 +75,13 @@ SELECTOR_CATEGORY_SECTION_LABEL = (
 SELECTOR_CATEGORY_SUBCATEGORY_LINK = "a.universGroup__CategoryLink-sc-6qd6g7-9.iUtWKS"
 SELECTOR_MENU_WRAPPER = "div.menuUniverse__Wrapper-sc-10tgqhe-0"
 
+SELECTOR_INDEX_LIST_CONTAINER = "ul.category-grouplist"
+SELECTOR_INDEX_ENTRY_ITEM = "ul.category-grouplist > li"
+SELECTOR_INDEX_ENTRY_LINK = "a"
+SELECTOR_INDEX_ENTRY_TITLE = "p.subCatTitle"
+SELECTOR_INDEX_ENTRY_IMAGE = "img"
+SELECTOR_INDEX_PAGE_HEADER = "h1#category"
+
 
 @contextmanager
 def browser_context(
@@ -172,9 +179,6 @@ def scrape_url(
         logger.exception(f"Error scraping URL: {play_err}")
 
 
-def extract_dropdown_items():
-    pass
-
 
 def scrape_product_listing_index(
     page: Page,
@@ -189,9 +193,9 @@ def scrape_product_listing_index(
     """
     print(f"[INFO] Navigating to subcategory page: {subcategory_url}")
     page.goto(subcategory_url, timeout=timeout)
-    page.wait_for_selector("h1#category", timeout=timeout)
+    page.wait_for_selector(SELECTOR_INDEX_PAGE_HEADER, timeout=timeout)
 
-    page_heading = page.query_selector("h1#category").inner_text().strip()
+    page_heading = page.query_selector(SELECTOR_INDEX_PAGE_HEADER).inner_text().strip()
 
     # Lol, we know bad things happen we don't to mistakenly
     # scape the wrong listing index
@@ -200,6 +204,38 @@ def scrape_product_listing_index(
             f"[WARN] Page Mismatch: Wrong page, perhaps? Expected '{subcategory_name}', got '{page_heading}'"
         )
         return
+
+    # that listing index is a collection of grouped indexes - say, items
+    page.wait_for_selector(SELECTOR_INDEX_LIST_CONTAINER)
+    _items = page.query_selector_all(SELECTOR_INDEX_ENTRY_ITEM)
+    index_entries = []
+
+    for entry in _items:
+        a_tag = entry.query_selector(SELECTOR_INDEX_ENTRY_LINK)
+        title_node = a_tag.query_selector(SELECTOR_INDEX_ENTRY_TITLE)
+        img_node = a_tag.query_selector(SELECTOR_INDEX_ENTRY_IMAGE)
+
+        title = title_node.inner_text().strip() if title_node else "Untitled"
+        href = a_tag.get_attribute("href") if a_tag else "#"
+        img_src = img_node.get_attribute("src") if img_node else ""
+        img_alt = img_node.get_attribute("alt") if img_node else ""
+
+        index_entries.append(
+            {
+                "title": title,
+                "href": href,
+                "image_meta": {"src": img_src, "alt": img_alt},
+            }
+        )
+
+    if storage_:
+        storage_["index_entries"] = index_entries
+
+    print(storage_)
+    # log the total number of scraped entries within this category
+    print(
+        f"[INFO] Extracted {len(index_entries)} index entries from '{subcategory_name}'"
+    )
 
 
 def find_extract_product_overview_meta():
@@ -272,8 +308,15 @@ def entrypoint(page: Page, index: Optional[ElementHandle] = None) -> None:
 
     # then we go into each product category listing (which is like a module index, a product catalog index) page, within a dropdown and scrape all information
     # keeping the heirachy in-tact
-    # for category in scraped_data.get("categories", []):
-    #     scrape_product_listing_index(page, subcategory_name=category, storage_=category)
+    for section in scraped_data["categories"]:
+        for subsection in section['subcategories']
+            scrape_product_listing_index(
+                page,
+                subsection['name'],
+                subsection['url'],
+                storage_=subsection
+
+            )
 
     # then we proceed to go into the respective 'Product' Index Detailed Overview Listing page, all available products per index
     # while sticking keeping heirachy in-place
