@@ -192,7 +192,7 @@ async def extract_categories(
 
         categories.append(
             {
-                "categories": category_name,
+                "section": category_name,
                 "subcategories": subcategories,
             }
         )
@@ -229,77 +229,12 @@ async def extract_categories_from_homepage(
         print("[ERROR] Innermost container never appeared in DOM")
         return
 
-    # now we find all list items belonging inside this container
-    # not sure if `Locator` is the best way here or `page.querySelector`
-    section_items = container.locator(SELECTOR_CATEGORY_ITEM)
-    section_elements = await section_items.element_handles()
-    print(f"[INFO] Found {len(section_elements)} sections")
-    # category_items = await page.query_selector_all(SELECTOR_CATEGORY_ITEM)
-
     try:
         categories = await extract_categories(page)
     except Exception as e:
         print(f"[ERROR] Failed to extract categories: {e}")
-        return
 
-        # for index, item in enumerate(section_elements):
-        # element_handle = page.locator(f"{SELECTOR_CATEGORY_ITEM} >> nth={index}")
-        # print(f"[INFO] {element_handle}")
-        #
-        # try:
-        #     # Click to expand dropdown
-        #     await element_handle.click()
-        #     # await human_delay(0.5, 1.2)
-        # except Exception as e:
-        #     print(f"[WARN] Failed to click section {index}: {e}")
-        #     continue
-        #
-        # # Try to extract section name
-        # section_label = await element_handle.locator(
-        #     SELECTOR_CATEGORY_LABEL_SAFE
-        # ).text_content()
-        # section_name = (
-        #     section_label.strip() if section_label else f"Unknown Section {index}"
-        # )
-        #
-        # # Extract subcategory links (visible after click)
-        # subcategories = []
-        # sub_links = await element_handle.locator(
-        #     SELECTOR_SUBCATEGORY_LINK_SAFE
-        # ).element_handles()
-        #
-        # for link_handle in sub_links:
-        #     try:
-        #         name = (await link_handle.text_content() or "").strip()
-        #         href = await link_handle.get_attribute("href") or "#"
-        #         subcategories.append({"name": name, "url": href})
-        #     except Exception as sub_err:
-        #         print(
-        #             f"[WARN] Failed reading subcategory in section '{section_name}': {sub_err}"
-        #         )
-        #
-        # print(f"[INFO] '{section_name}' → {len(subcategories)} subcategories")
-
-        # for item in category_items:
-        #     section_label = await item.query_selector(SELECTOR_CATEGORY_LABEL)
-        #     section_name = (
-        #         await section_label.inner_text() if section_label else "Unknown Section"
-        #     )
-        #
-        #     await human_delay(0.5, 1.2)
-        #
-        # subcategory_links = await item.query_selector_all(SELECTOR_SUBCATEGORY_LINK)
-        # subcategories = []
-        #
-        # for sub_handle in subcategory_links:
-        #     name = await sub_handle.inner_text()
-        #     href = await sub_handle.get_attribute("href") or "#"
-        #     subcategories.append({"name": name, "url": href})
-        #
-        # print(f"[INFO] '{section_name}' → {len(subcategories)} subcategories")
-        # categories.append({"section": section_name, "subcategories": subcategories})
-
-    if storage_ is not None:
+    if storage_:
         storage_["categories"] = categories
 
     print(f"[INFO] Extracted {len(categories)} top-level sections.")
