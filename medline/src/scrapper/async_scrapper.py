@@ -133,80 +133,73 @@ async def extract_categories(
     logger_func = logger_func or print
 
     logger_func("[*] Looking for top-level category items...")
-    # category_items = page.locator(SELECTOR_CATEGORY_ITEM)
-    category_items = await fallback_locator(
+    section_items = await fallback_locator(
         page,
         [
             "li[data-cy^='universGroupItemCy_']",
             SELECTOR_CATEGORY_ITEM,
         ],
     )
-    category_items = await category_items.all()
+    section_items = await section_items.all()
 
-    logger_func(f"[+] Found {len(category_items)} top-level category items")
+    logger_func(f"[+] Found {len(section_items)} top-level category items")
 
     categories: List[Dict[str, Any]] = []
 
-    for i, item in enumerate(category_items):
-        item = item.nth(i)
+    for i, section in enumerate(section_items):
         logger_func(f"\n[→] Processing category index {i}")
 
         try:
-            label_node = item.get_attribute(
-                "universGroup__UniverseGroupLabel-sc-6qd6g7-10.gKaSAR"
+            label_node = await fallback_locator(
+                page,
+                scope=section,
+                selectors=[
+                    ":scope span[class*='UniverseGroupLabel']",
+                    ":scope span[class*='universeGroup__UniverseGroupLabel']",
+                    ":scope span",
+                ],
             )
-            # label_node = await fallback_locator(
-            #     page,
-            #     scope=item,
-            #     selectors=[
-            #         "span[class*='UniverseGroupLabel']",
-            #         "span[class*='universeGroup__UniverseGroupLabel']",
-            #         SELECTOR_CATEGORY_LABEL_SAFE,
-            #     ],
-            # )
+            print(f"[INFO] {label_node}")
             category_name = (await label_node.inner_text()).strip()
             logger_func(f"    [✓] Category name: '{category_name}'")
         except Exception as e:
             logger_func(f"    [!] Failed to extract category name: {e}")
             continue
 
-        # Try to click and expand dropdown
+        # expand dropdown
         try:
-            await item.click(timeout=2000)
+            # wait 5 secs
+            await section.wait_for(timeout=5000)
+            await section.click(timeout=2000)
             await human_delay(0.2)
             logger_func("    [✓] Clicked to expand dropdown")
         except Exception as e:
             logger_func(f"    [!] Failed to expand category '{category_name}': {e}")
 
+        subsections = await section.locator("ul li a").all()
+        logger_func(f"[→] Section: {category_name} ({len(subsections)} subcategories)")
+
         subcategories = []
-        try:
-            # sub_links = item.locator(_SELECTOR_SUBCATEGORY_LINK_SAFE)
-            sub_links = await fallback_locator(
-                page,
-                scope=item,
-                selectors=[
-                    "a[class*='CategoryLink']",
-                    "a[class*='CategoryLink-sc-']",
-                    SELECTOR_SUBCATEGORY_LINK_SAFE,
-                ],
-            )
-            count_links = await sub_links.count()
-            logger_func(f"    [✓] Found {count_links} subcategory links")
+        for subsection in subsections:
+            try:
+                name = (await subsection.inner_text()).strip()
+                href = await subsection.get_attribute("href")
+                if name and href:
+                    subcategories.append({"name": name, "url": href})
+                    logger_func(f"    [✓] Subsection: {name}")
+            except Exception as e:
+                logger_func(f"    [!] Failed to extract subsection link: {e}")
 
-            for j in range(count_links):
-                try:
-                    link = sub_links.nth(j)
-                    name = (await link.inner_text()).strip()
-                    href = await link.get_attribute("href")
-                    if name and href:
-                        subcategories.append({"name": name, "url": href})
-                        logger_func(f"      [+] {name} → {href}")
-                except Exception as e:
-                    logger_func(f"      [!] Skipped malformed subcategory link: {e}")
-        except Exception as e:
-            logger_func(f"    [!] Failed to collect subcategories: {e}")
+        categories.append(
+            {
+                "categories": category_name,
+                "subcategories": subcategories,
+            }
+        )
 
-        categories.append({"section": category_name, "subcategories": subcategories})
+        logger_func(
+            f"[→] Completed Section: {category_name} ({len(subsections)} subcategories)"
+        )
 
     logger_func("\n[✓] Completed extracting all categories.")
     return categories
@@ -249,66 +242,62 @@ async def extract_categories_from_homepage(
         print(f"[ERROR] Failed to extract categories: {e}")
         return
 
-    import pdb
+        # for index, item in enumerate(section_elements):
+        # element_handle = page.locator(f"{SELECTOR_CATEGORY_ITEM} >> nth={index}")
+        # print(f"[INFO] {element_handle}")
+        #
+        # try:
+        #     # Click to expand dropdown
+        #     await element_handle.click()
+        #     # await human_delay(0.5, 1.2)
+        # except Exception as e:
+        #     print(f"[WARN] Failed to click section {index}: {e}")
+        #     continue
+        #
+        # # Try to extract section name
+        # section_label = await element_handle.locator(
+        #     SELECTOR_CATEGORY_LABEL_SAFE
+        # ).text_content()
+        # section_name = (
+        #     section_label.strip() if section_label else f"Unknown Section {index}"
+        # )
+        #
+        # # Extract subcategory links (visible after click)
+        # subcategories = []
+        # sub_links = await element_handle.locator(
+        #     SELECTOR_SUBCATEGORY_LINK_SAFE
+        # ).element_handles()
+        #
+        # for link_handle in sub_links:
+        #     try:
+        #         name = (await link_handle.text_content() or "").strip()
+        #         href = await link_handle.get_attribute("href") or "#"
+        #         subcategories.append({"name": name, "url": href})
+        #     except Exception as sub_err:
+        #         print(
+        #             f"[WARN] Failed reading subcategory in section '{section_name}': {sub_err}"
+        #         )
+        #
+        # print(f"[INFO] '{section_name}' → {len(subcategories)} subcategories")
 
-    pdb.set_trace()
-
-    # for index, item in enumerate(section_elements):
-    # element_handle = page.locator(f"{SELECTOR_CATEGORY_ITEM} >> nth={index}")
-    # print(f"[INFO] {element_handle}")
-    #
-    # try:
-    #     # Click to expand dropdown
-    #     await element_handle.click()
-    #     # await human_delay(0.5, 1.2)
-    # except Exception as e:
-    #     print(f"[WARN] Failed to click section {index}: {e}")
-    #     continue
-    #
-    # # Try to extract section name
-    # section_label = await element_handle.locator(
-    #     SELECTOR_CATEGORY_LABEL_SAFE
-    # ).text_content()
-    # section_name = (
-    #     section_label.strip() if section_label else f"Unknown Section {index}"
-    # )
-    #
-    # # Extract subcategory links (visible after click)
-    # subcategories = []
-    # sub_links = await element_handle.locator(
-    #     SELECTOR_SUBCATEGORY_LINK_SAFE
-    # ).element_handles()
-    #
-    # for link_handle in sub_links:
-    #     try:
-    #         name = (await link_handle.text_content() or "").strip()
-    #         href = await link_handle.get_attribute("href") or "#"
-    #         subcategories.append({"name": name, "url": href})
-    #     except Exception as sub_err:
-    #         print(
-    #             f"[WARN] Failed reading subcategory in section '{section_name}': {sub_err}"
-    #         )
-    #
-    # print(f"[INFO] '{section_name}' → {len(subcategories)} subcategories")
-
-    # for item in category_items:
-    #     section_label = await item.query_selector(SELECTOR_CATEGORY_LABEL)
-    #     section_name = (
-    #         await section_label.inner_text() if section_label else "Unknown Section"
-    #     )
-    #
-    #     await human_delay(0.5, 1.2)
-    #
-    #     subcategory_links = await item.query_selector_all(SELECTOR_SUBCATEGORY_LINK)
-    #     subcategories = []
-    #
-    #     for sub_handle in subcategory_links:
-    #         name = await sub_handle.inner_text()
-    #         href = await sub_handle.get_attribute("href") or "#"
-    #         subcategories.append({"name": name, "url": href})
-    #
-    #     print(f"[INFO] '{section_name}' → {len(subcategories)} subcategories")
-    #     categories.append({"section": section_name, "subcategories": subcategories})
+        # for item in category_items:
+        #     section_label = await item.query_selector(SELECTOR_CATEGORY_LABEL)
+        #     section_name = (
+        #         await section_label.inner_text() if section_label else "Unknown Section"
+        #     )
+        #
+        #     await human_delay(0.5, 1.2)
+        #
+        # subcategory_links = await item.query_selector_all(SELECTOR_SUBCATEGORY_LINK)
+        # subcategories = []
+        #
+        # for sub_handle in subcategory_links:
+        #     name = await sub_handle.inner_text()
+        #     href = await sub_handle.get_attribute("href") or "#"
+        #     subcategories.append({"name": name, "url": href})
+        #
+        # print(f"[INFO] '{section_name}' → {len(subcategories)} subcategories")
+        # categories.append({"section": section_name, "subcategories": subcategories})
 
     if storage_ is not None:
         storage_["categories"] = categories
