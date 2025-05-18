@@ -1,6 +1,7 @@
 import asyncio
 import random
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Any, Callable, Dict, List, Optional
 
 from bs4 import BeautifulSoup
@@ -141,33 +142,70 @@ async def _get_rendered_html(page: Page, selector: str | None = None) -> Beautif
     return BeautifulSoup(html, "html.parser")
 
 
-def write_categories_to_excel(
-    categories: list[dict], filename: str = "categories.xlsx"
-) -> None:
-    wb = Workbook()
+def write_category_to_excel(
+    categories: List[Dict[str, Any]],
+    filename: str = "scraped_expo_data.xlsx",
+    output_dir: Path | None = None,
+):
+    # output_path = Path(output_dir) / filename if output_dir else Path(filename)
 
-    # Remove default sheet created automatically
-    default_sheet = wb.active
-    wb.remove(default_sheet)  # type: ignore
+    if output_dir is None:
+        base_dir = Path(__file__).resolve().parent
+        output_dir = base_dir / "exports"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / filename
+
+    wb = Workbook()
+    worksheet = wb.active
+    worksheet.title = "CATEGORIES CATALOG"
+
+    headers = ["Category", "Subcategory", "URL"]
+    worksheet.append(headers)
 
     for category in categories:
-        section_name = category["section"][:31]
-        ws = wb.create_sheet(title=section_name)
+        category_name = category["section"]
+        for sub in category["subcategories"]:
+            worksheet.append([category_name, sub["name"], sub["url"]])
 
-        # attah headers
-        ws.append(["Subcategory Name", "URL"])
+    # Optional: auto-adjust column widths
+    for col in worksheet.columns:
+        max_length = max(len(str(cell.value or "")) for cell in col)
+        adjusted_width = max_length + 2
+        col_letter = get_column_letter(col[0].column)  # type: ignore
+        worksheet.column_dimensions[col_letter].width = adjusted_width
 
-        # write the subcategories into respective section pages
-        for subcat in category.get("subcategories", []):
-            ws.append([subcat["name"], subcat["url"]])
+    wb.save(output_path)
+    print(f"[✓] Excel file saved to: {output_path}")
 
-        # set column widit
-        for col in range(1, 3):
-            max_length = max(
-                (len(str(cell.value)) for cell in ws[get_column_letter(col)]),
-                default=10,
-            )
-            ws.column_dimensions[get_column_letter(col)].width = max_length + 5
 
-    wb.save(filename)
-    print(f"[INFO] Saved Excel file: {filename}")
+# def write_category_to_excel(
+#     categories: list[dict], filename: str = "categories.xlsx"
+# ) -> None:
+#     wb = Workbook()
+#
+#     # Remove default sheet created automatically
+#     default_sheet = wb.active
+#     wb.remove(default_sheet)  # type: ignore
+#
+#     for category in categories:
+#         section_name = category["section"][:31]
+#         ws = wb.create_sheet(title=section_name)
+#
+#         # attah headers
+#         ws.append(["Subcategory Name", "URL"])
+#
+#         # write the subcategories into respective section pages
+#         for subcat in category.get("subcategories", []):
+#             ws.append([subcat["name"], subcat["url"]])
+#
+#         # set column widit
+#         for col in range(1, 3):
+#             max_length = max(
+#                 (len(str(cell.value)) for cell in ws[get_column_letter(col)]),
+#                 default=10,
+#             )
+#             ws.column_dimensions[get_column_letter(col)].width = max_length + 5
+#
+#     wb.save(filename)
+#     print(f"[INFO] Saved Excel file: {filename}")

@@ -4,6 +4,7 @@ import os
 import random
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Callable, Dict, List, Optional
 
@@ -30,7 +31,7 @@ from .constants import (SELECTOR_CATEGORY_ITEM, SELECTOR_CATEGORY_LABEL,
 from .constants import _ResponseData as Response
 from .utils import (browser_context, fallback_locator, get_random_user_agent,
                     goto_with_retry, human_delay, retry_with_backoff,
-                    write_categories_to_excel)
+                    write_category_to_excel)
 
 logger = logging.getLogger(__name__)
 
@@ -233,35 +234,45 @@ async def extract_categories_from_homepage(
         categories = await extract_categories(page)
     except Exception as e:
         print(f"[ERROR] Failed to extract categories: {e}")
+        return
 
     if storage_:
         storage_["categories"] = categories
 
     print(f"[INFO] Extracted {len(categories)} top-level sections.")
+    return categories
 
 
 async def entrypoint(page: Page, to_excel=False) -> None:
     print("[INFO] Attempting to perform scrapping...")
     scraped_data: Response = {}
 
-    await extract_categories_from_homepage(page, storage_=scraped_data)
+    # categories = await extract_categories_from_homepage(page, storage_=scraped_data)
+    categories = await extract_categories_from_homepage(page)
+
+    if categories:
+        scraped_data["categories"] = categories
 
     print("[INFO] Completed Extract")
 
-    # Uncomment to test deeper levels
     # for section in scraped_data["categories"]:
     #     for subsection in section["subcategories"]:
     #         await scrape_product_listing_index(
     #             page, subsection["name"], subsection["url"], storage_=subsection
     #         )
 
+    print(f"[INFO] {scraped_data}")
+    # breakpoint()
+
     if to_excel and "categories" in scraped_data:
-        write_categories_to_excel(
-            scraped_data["categories"], filename="scraped_categories.xlsx"
+        print("[DEBUG] Writing extracted categories to Excel file...")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        write_category_to_excel(
+            scraped_data["categories"], filename=f"scraped_expo_data_{timestamp}.xlsx"
         )
 
 
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(scrape_url(url, headless=False))
+    asyncio.run(scrape_url(url, headless=False, to_excel=True))
