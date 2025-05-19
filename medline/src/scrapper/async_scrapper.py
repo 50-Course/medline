@@ -75,8 +75,8 @@ async def scrape_url(
         logger.exception(f"Error scraping URL: {play_err}")
 
 
-async def scrape_all_subcategory_listings(ctx: BrowserContext, categories):
-    sem = asyncio.Semaphore(5)  # Adjust concurrency limit as needed
+async def scrape_all_subcategory_indexes(ctx: BrowserContext, categories):
+    sem = asyncio.Semaphore(5)
     jobs = []
 
     for section in categories:
@@ -295,7 +295,7 @@ async def entrypoint(page: Page, to_excel=False) -> None:
     #         )
 
     # let's run it in parralel
-    await scrape_all_subcategory_listings(page.context, scraped_data["categories"])
+    await scrape_all_subcategory_indexes(page.context, scraped_data["categories"])
     # import pdb
 
     # pdb.set_trace()
