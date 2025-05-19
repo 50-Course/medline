@@ -75,16 +75,38 @@ async def scrape_url(
         logger.exception(f"Error scraping URL: {play_err}")
 
 
+async def scrape_all_subcategory_listings(ctx: BrowserContext, categories):
+    sem = asyncio.Semaphore(5)  # Adjust concurrency limit as needed
+    jobs = []
+
+    for section in categories:
+        for sub in section["subcategories"]:
+
+            async def scrape_subcategory(name=sub["name"], url=sub["url"], storage=sub):
+                async with sem:
+                    page = await ctx.new_page()
+                    try:
+                        await scrape_product_listing_index(
+                            page, name, url, storage_=storage
+                        )
+                    except Exception as e:
+                        print(f"[ERROR] Failed scraping {name}: {e}")
+                    finally:
+                        await page.close()
+
+            jobs.append(scrape_subcategory())
+
+    await asyncio.gather(*jobs)
+
+
 async def scrape_product_listing_index(
     page: Page,
     subcategory_name: str,
     subcategory_url: str,
-    base_url: str = "https://www.medicalexpo.com",
     storage_: Optional[Response] = None,
-    timeout: Optional[int] = 30000,
 ) -> None:
     print(f"[INFO] Navigating to subcategory page: {subcategory_url}")
-    await page.goto(subcategory_url, timeout=timeout)
+    await retry_with_backoff(lambda: page.goto(subcategory_url))
     await page.wait_for_selector(SELECTOR_INDEX_PAGE_HEADER)
 
     page_heading = await (
@@ -96,30 +118,41 @@ async def scrape_product_listing_index(
         )
         return
 
-    await page.wait_for_selector(SELECTOR_INDEX_LIST_CONTAINER)
-    _items = await page.query_selector_all(SELECTOR_INDEX_ENTRY_ITEM)
+    # Wait for parent container
+    await page.wait_for_selector("div#category-group ul.category-grouplist")
+    group_nodes = await page.query_selector_all(
+        "div#category-group ul.category-grouplist"
+    )
+
     index_entries = []
 
-    for entry in _items:
-        a_tag = await entry.query_selector(SELECTOR_INDEX_ENTRY_LINK)
-        title_node = await a_tag.query_selector(SELECTOR_INDEX_ENTRY_TITLE)
-        img_node = await a_tag.query_selector(SELECTOR_INDEX_ENTRY_IMAGE)
+    for group in group_nodes:
+        item_nodes = await group.query_selector_all("li")
+        for item in item_nodes:
+            a_tag = await item.query_selector("a")
+            img_tag = await item.query_selector("div.imgSubCat img")
 
-        title = await title_node.inner_text() if title_node else "Untitled"
-        await human_delay(0.5, 1.5)
-        href = await a_tag.get_attribute("href") if a_tag else "#"
-        img_src = await img_node.get_attribute("src") if img_node else ""
-        img_alt = await img_node.get_attribute("alt") if img_node else ""
+            if not a_tag:
+                continue
 
-        index_entries.append(
-            {
-                "title": title,
-                "href": href,
-                "image_meta": {"src": img_src, "alt": img_alt},
-            }
-        )
+            name = (await a_tag.inner_text()).strip()
+            href = await a_tag.get_attribute("href")
+            img_src = await img_tag.get_attribute("src") if img_tag else ""
+            img_alt = await img_tag.get_attribute("alt") if img_tag else ""
+
+            index_entries.append(
+                {
+                    "title": name,
+                    "href": href,
+                    "image_meta": {
+                        "src": img_src,
+                        "alt": img_alt,
+                    },
+                }
+            )
 
     print(index_entries)
+
     if storage_ is not None:
         storage_["index_entries"] = index_entries
 
@@ -261,8 +294,13 @@ async def entrypoint(page: Page, to_excel=False) -> None:
     #             page, subsection["name"], subsection["url"], storage_=subsection
     #         )
 
+    # let's run it in parralel
+    await scrape_all_subcategory_listings(page.context, scraped_data["categories"])
+    # import pdb
+
+    # pdb.set_trace()
+
     print(f"[INFO] {scraped_data}")
-    # breakpoint()
 
     if to_excel and "categories" in scraped_data:
         print("[DEBUG] Writing extracted categories to Excel file...")
@@ -275,4 +313,4 @@ async def entrypoint(page: Page, to_excel=False) -> None:
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(scrape_url(url, headless=False, to_excel=True))
+    asyncio.run(scrape_url(url, headless=False, to_excel=False))
