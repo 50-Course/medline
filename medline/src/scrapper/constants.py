@@ -23,6 +23,7 @@ url: str = "https://www.medicalexpo.com/"
 _ResponseData = Annotated[dict, "Prettified JSON response"]
 
 # PAGE 2 =====================================
+SELECTOR_INDEX_PARENT_CONTAINER = 'div.hoverizeList:nth-child(1)'
 SELECTOR_INDEX_LIST_CONTAINER = "ul.category-grouplist"
 SELECTOR_INDEX_ENTRY_ITEM = "ul.category-grouplist > li"
 SELECTOR_INDEX_ENTRY_LINK = "a"

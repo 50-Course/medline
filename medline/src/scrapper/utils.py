@@ -7,6 +7,7 @@ from typing import Annotated, Any, Callable, Dict, List, Optional
 from bs4 import BeautifulSoup
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 from playwright.async_api import Locator, Page, async_playwright
 
 from .constants import USER_AGENTS as BROWSER_AGENTS
@@ -142,13 +143,69 @@ async def _get_rendered_html(page: Page, selector: str | None = None) -> Beautif
     return BeautifulSoup(html, "html.parser")
 
 
+def sanitize_sheet_name(name: str) -> str:
+    """Ensure Excel sheet names are valid (max 31 chars, no special chars)."""
+    invalid_chars = ["/", "\\", "*", "[", "]", ":", "?"]
+    for char in invalid_chars:
+        name = name.replace(char, "")
+    return name[:31]
+
+
+def auto_adjust_column_width(sheet: Worksheet):
+    # auto-adjust column widths
+    for col in sheet.columns:
+        max_length = max(len(str(cell.value or "")) for cell in col)
+        adjusted_width = max_length + 2
+        col_letter = get_column_letter(col[0].column)
+        sheet.column_dimensions[col_letter].width = adjusted_width
+
+
+def write_subcategory_sheets(wb: Workbook, categories: List[Dict[str, Any]]):
+    for category in categories:
+        section = category["section"]
+        for sub in category["subcategories"]:
+            name = sanitize_sheet_name(sub["name"])
+            index_entries = sub.get("index_entries", [])
+            if not index_entries:
+                continue
+
+            ws = wb.create_sheet(title=name)
+            headers = ["Section", "Title", "URL", "Image Src", "Image Alt"]
+            ws.append(headers)
+
+            for item in index_entries:
+                ws.append(
+                    [
+                        section,
+                        item.get("title", ""),
+                        item.get("href", ""),
+                        item.get("image_meta", {}).get("src", ""),
+                        item.get("image_meta", {}).get("alt", ""),
+                    ]
+                )
+
+            auto_adjust_column_width(ws)
+
+
+def write_overview_sheet(wb: Workbook, categories: List[Dict[str, Any]]):
+    overview = wb.active
+    overview.title = "CATEGORIES CATALOG"
+    headers = ["Category", "Subcategory", "URL"]
+    overview.append(headers)
+
+    for category in categories:
+        category_name = category["section"]
+        for sub in category["subcategories"]:
+            overview.append([category_name, sub["name"], sub["url"]])
+
+    auto_adjust_column_width(overview)
+
+
 def write_category_to_excel(
     categories: List[Dict[str, Any]],
     filename: str = "scraped_expo_data.xlsx",
     output_dir: Path | None = None,
 ):
-    # output_path = Path(output_dir) / filename if output_dir else Path(filename)
-
     if output_dir is None:
         base_dir = Path(__file__).resolve().parent
         output_dir = base_dir / "exports"
@@ -157,55 +214,44 @@ def write_category_to_excel(
     output_path = output_dir / filename
 
     wb = Workbook()
-    worksheet = wb.active
-    worksheet.title = "CATEGORIES CATALOG"
-
-    headers = ["Category", "Subcategory", "URL"]
-    worksheet.append(headers)
-
-    for category in categories:
-        category_name = category["section"]
-        for sub in category["subcategories"]:
-            worksheet.append([category_name, sub["name"], sub["url"]])
-
-    # Optional: auto-adjust column widths
-    for col in worksheet.columns:
-        max_length = max(len(str(cell.value or "")) for cell in col)
-        adjusted_width = max_length + 2
-        col_letter = get_column_letter(col[0].column)  # type: ignore
-        worksheet.column_dimensions[col_letter].width = adjusted_width
+    write_overview_sheet(wb, categories)
+    write_subcategory_sheets(wb, categories)
 
     wb.save(output_path)
     print(f"[✓] Excel file saved to: {output_path}")
 
 
+# TODO: refactor into composale functions
 # def write_category_to_excel(
-#     categories: list[dict], filename: str = "categories.xlsx"
-# ) -> None:
-#     wb = Workbook()
+#     categories: List[Dict[str, Any]],
+#     filename: str = "scraped_expo_data.xlsx",
+#     output_dir: Path | None = None,
+# ):
+#     if output_dir is None:
+#         base_dir = Path(__file__).resolve().parent
+#         output_dir = base_dir / "exports"
+#         output_dir.mkdir(parents=True, exist_ok=True)
 #
-#     # Remove default sheet created automatically
-#     default_sheet = wb.active
-#     wb.remove(default_sheet)  # type: ignore
+#     output_path = output_dir / filename
+#
+#     wb = Workbook()
+#     worksheet = wb.active
+#     worksheet.title = "CATEGORIES CATALOG"
+#
+#     headers = ["Category", "Subcategory", "URL"]
+#     worksheet.append(headers)
 #
 #     for category in categories:
-#         section_name = category["section"][:31]
-#         ws = wb.create_sheet(title=section_name)
+#         category_name = category["section"]
+#         for sub in category["subcategories"]:
+#             worksheet.append([category_name, sub["name"], sub["url"]])
 #
-#         # attah headers
-#         ws.append(["Subcategory Name", "URL"])
+#     # Optional: auto-adjust column widths
+#     for col in worksheet.columns:
+#         max_length = max(len(str(cell.value or "")) for cell in col)
+#         adjusted_width = max_length + 2
+#         col_letter = get_column_letter(col[0].column)  # type: ignore
+#         worksheet.column_dimensions[col_letter].width = adjusted_width
 #
-#         # write the subcategories into respective section pages
-#         for subcat in category.get("subcategories", []):
-#             ws.append([subcat["name"], subcat["url"]])
-#
-#         # set column widit
-#         for col in range(1, 3):
-#             max_length = max(
-#                 (len(str(cell.value)) for cell in ws[get_column_letter(col)]),
-#                 default=10,
-#             )
-#             ws.column_dimensions[get_column_letter(col)].width = max_length + 5
-#
-#     wb.save(filename)
-#     print(f"[INFO] Saved Excel file: {filename}")
+#     wb.save(output_path)
+#     print(f"[✓] Excel file saved to: {output_path}")
