@@ -394,6 +394,63 @@ async def entrypoint(page: Page, to_excel=False) -> None:
 
 
 if __name__ == "__main__":
+    import argparse
     import asyncio
 
-    asyncio.run(scrape_url(url, headless=False, to_excel=True))
+    parser = argparse.ArgumentParser(description="MedicalExpo Product Scraper")
+
+    parser.add_argument(
+        "--url",
+        type=str,
+        default="https://www.medicalexpo.com/",
+        help="Target URL to scrape from.",
+    )
+
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run browser in headless mode.",
+    )
+
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Debug Mode",
+    )
+
+    parser.add_argument(
+        "--slow-mo",
+        type=int,
+        default=40,
+        help="Slow motion delay in ms between browser actions (default: 40).",
+    )
+
+    parser.add_argument(
+        "--wait-for-load",
+        type=int,
+        default=3000,
+        help="Wait time in ms after initial page load (default: 3000).",
+    )
+
+    parser.add_argument(
+        "--to-excel",
+        action="store_true",
+        help="Whether to write the result to Excel.",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Path to directory for saving output files.",
+    )
+
+    parser.add_argument(
+        "--notify",
+        action="store_true",
+        help="Send notification after scraping (e.g., Slack/Email/Whatsapp or Text).",
+    )
+
+    args = parser.parse_args()
+
+    asyncio.run(scrape_url(url, headless=args.headless, to_excel=args.to_excel))
