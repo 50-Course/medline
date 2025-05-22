@@ -28,7 +28,7 @@ jobs:
       - name: Install project dependencies with uv
         run: |
           cd medline
-          uv pip install --system --group default
+          uv pip install --system
           # uv pip install --system -r requirements.txt || uv venv && uv pip install --system
 
       - name: Install Playwright + dependencies
@@ -37,8 +37,8 @@ jobs:
 
       - name: Run scraper script
         run: |
-          cd src
-          python -m scrapper.async_scrapper --headless --to-excel
+          cd medline
+          python -m src.scrapper.async_scrapper --headless --to-excel
 
       - name: Upload Excel output
         uses: actions/upload-artifact@v4
