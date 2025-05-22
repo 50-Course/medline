@@ -1,0 +1,40 @@
+name: Scrape MedicalExpo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install project dependencies with uv
+        run: |
+          uv pip install --system
+          # uv pip install --system -r requirements.txt || uv venv && uv pip install --system
+
+      - name: Install Playwright + dependencies
+        run: |
+          playwright install --with-deps
+
+      - name: Run scraper script (headless mode)
+        run: |
+          python -m scrapper.async_scrapper --headless --to-excel
+
+      - name: Upload Excel output
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraped-excel-output
+          path: scrapper/exports/*.xlsx
