@@ -1,6 +1,11 @@
 name: Scrape MedicalExpo
 
 on:
+  push:
+  pull_request:
+    branches:
+      - main
+    types: [opened]
   workflow_dispatch:
 
 jobs:
@@ -29,7 +34,7 @@ jobs:
         run: |
           playwright install --with-deps
 
-      - name: Run scraper script (headless mode)
+      - name: Run scraper script
         run: |
           python -m scrapper.async_scrapper --headless --to-excel
 
