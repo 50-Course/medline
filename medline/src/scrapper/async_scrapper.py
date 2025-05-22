@@ -415,7 +415,9 @@ async def extract_product_info_from_page(
 
         description_element = await tile.query_selector("p.description-text")
         description = (
-            description_element.inner_text().strip() if description_element else None
+            await description_element.inner_text().strip()
+            if description_element
+            else None
         )
 
         extracted_data = {
