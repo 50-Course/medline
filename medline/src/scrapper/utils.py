@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from playwright.async_api import Locator, Page, async_playwright
+from playwright.sync_api import BrowserContext
 
 from .constants import USER_AGENTS as BROWSER_AGENTS
 from .constants import url as BASE_URL
@@ -216,9 +217,172 @@ def write_category_to_excel(
     wb = Workbook()
     write_overview_sheet(wb, categories)
     write_subcategory_sheets(wb, categories)
+    write_products_to_excel(wb, categories)
 
     wb.save(output_path)
     print(f"[✓] Excel file saved to: {output_path}")
+
+
+def write_products_to_excel(
+    wb: Workbook,
+    categories: list[dict[str, Any]],
+):
+    for category in categories:
+        section = category["section"]
+        for sub in category.get("subcategories", []):
+            for entry in sub.get("index_entries", []):
+                products = entry.get("products", [])
+
+                if not products:
+                    continue  # skip
+
+                sheet_name = sanitize_sheet_name(entry["title"])
+                ws = wb.create_sheet(title=sheet_name)
+
+                headers = [
+                    "Section",
+                    "Subcategory",
+                    "Entry Title",
+                    "Product Name",
+                    "Manufacturer",
+                    "Price",
+                    "Currency",
+                    "Model",
+                    "Features",
+                    "Image Src",
+                    "Link",
+                ]
+                ws.append(headers)
+
+                for p in products:
+                    ws.append(
+                        [
+                            section,
+                            sub["name"],
+                            entry["title"],
+                            p.get("product_title"),
+                            p.get("manufacturer_name"),
+                            p.get("price"),
+                            p.get("currency"),
+                            p.get("product_model"),
+                            ", ".join(p.get("features", [])),
+                            p.get("tile_image_src"),
+                            p.get("product_link"),
+                        ]
+                    )
+                auto_adjust_column_width(ws)
+
+
+def write_product_entry_to_excel(
+    entry: Dict[str, Any], section: str, subcategory: str, output_dir: Path
+):
+    """Alternative function to write"""
+    if not entry.get("products"):
+        return
+
+    title = sanitize_sheet_name(entry["title"])
+    filename = f"{section}__{subcategory}__{title}.xlsx".replace(" ", "_")
+    path = output_dir / filename
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Products"
+
+    headers = [
+        "Product Name",
+        "Manufacturer",
+        "Price",
+        "Currency",
+        "Model",
+        "Features",
+        "Image Src",
+        "Link",
+    ]
+    ws.append(headers)
+
+    for p in entry["products"]:
+        ws.append(
+            [
+                p.get("product_title"),
+                p.get("manufacturer_name"),
+                p.get("price"),
+                p.get("currency"),
+                p.get("product_model"),
+                ", ".join(p.get("features", [])),
+                p.get("tile_image_src"),
+                p.get("product_link"),
+            ]
+        )
+
+    auto_adjust_column_width(ws)
+    wb.save(path)
+    print(f"[✓] Saved: {path}")
+
+
+async def extract_product_link_from_tile(tile):
+    """
+    Attempts to extract the product link from a product tile element using multiple strategies.
+
+    Either:
+    - Direct refs
+    - Through onClick refs
+    - data-url/attributes refs
+    - decorator links
+    """
+    # Look for a direct <a href="...">
+    link_el = await tile.query_selector("a[href]")
+    if link_el:
+        href = await link_el.get_attribute("href")
+        if href:
+            return href
+
+    # Look for onclick handler with location.href
+    onclick = await tile.get_attribute("onclick")
+    if onclick and "location.href" in onclick:
+        # Example format: onclick="location.href='/products/123'"
+        parts = onclick.split("location.href=")
+        if len(parts) > 1:
+            link_candidate = parts[1].strip("';\" ")
+            if link_candidate:
+                return link_candidate
+
+    # Look for data-url or data-href attributes
+    data_link = await tile.get_attribute("data-url") or tile.get_attribute("data-href")
+    if data_link:
+        return data_link
+
+    # Fallback; If it has a custom attribute like decorator="linkRender('/path')"
+    decorator_attr = await tile.get_attribute("decorator")
+    if decorator_attr and "linkRender" in decorator_attr:
+        try:
+            return decorator_attr.split("linkRender('")[1].split("'")[0]
+        except IndexError:
+            pass
+
+    return None
+
+
+def extract_all_pages(ctx: BrowserContext, start_url: str):
+    """Meant for use for paginated pages in products overview page"""
+    all_results = []
+
+    page = ctx.new_page()
+    page.goto(start_url)
+    all_results.extend(extract_product_info_from_page(page))
+
+    # Paginate through additional pages
+    pagination = page.query_selector_all(".pagination-wrapper a:not(.next)")
+    visited = set()
+
+    for anchor in pagination:
+        href = anchor.get_attribute("href")
+        if href and href not in visited:
+            visited.add(href)
+            print(f"Navigating to: {href}")
+            page.goto(href)
+            all_results.extend(extract_product_info_from_page(page))
+
+    return all_results
 
 
 # TODO: refactor into composale functions
