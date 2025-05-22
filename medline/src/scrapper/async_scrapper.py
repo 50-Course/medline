@@ -18,20 +18,31 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
-from .constants import (SELECTOR_CATEGORY_ITEM, SELECTOR_CATEGORY_LABEL,
-                        SELECTOR_CATEGORY_LABEL_SAFE,
-                        SELECTOR_HOMEPAGE_PRODUCTS_COLUMN,
-                        SELECTOR_INDEX_ENTRY_IMAGE, SELECTOR_INDEX_ENTRY_ITEM,
-                        SELECTOR_INDEX_ENTRY_LINK, SELECTOR_INDEX_ENTRY_TITLE,
-                        SELECTOR_INDEX_LIST_CONTAINER,
-                        SELECTOR_INDEX_PAGE_HEADER,
-                        SELECTOR_PRODUCTS_INNERMOST_CONTAINER,
-                        SELECTOR_SUBCATEGORY_LINK,
-                        SELECTOR_SUBCATEGORY_LINK_SAFE)
+from .constants import (
+    SELECTOR_CATEGORY_ITEM,
+    SELECTOR_CATEGORY_LABEL,
+    SELECTOR_CATEGORY_LABEL_SAFE,
+    SELECTOR_HOMEPAGE_PRODUCTS_COLUMN,
+    SELECTOR_INDEX_ENTRY_IMAGE,
+    SELECTOR_INDEX_ENTRY_ITEM,
+    SELECTOR_INDEX_ENTRY_LINK,
+    SELECTOR_INDEX_ENTRY_TITLE,
+    SELECTOR_INDEX_LIST_CONTAINER,
+    SELECTOR_INDEX_PAGE_HEADER,
+    SELECTOR_PRODUCTS_INNERMOST_CONTAINER,
+    SELECTOR_SUBCATEGORY_LINK,
+    SELECTOR_SUBCATEGORY_LINK_SAFE,
+)
 from .constants import _ResponseData as Response
-from .utils import (browser_context, fallback_locator, get_random_user_agent,
-                    goto_with_retry, human_delay, retry_with_backoff,
-                    write_category_to_excel)
+from .utils import (
+    browser_context,
+    fallback_locator,
+    get_random_user_agent,
+    goto_with_retry,
+    human_delay,
+    retry_with_backoff,
+    write_category_to_excel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +87,7 @@ async def scrape_url(
 
 
 async def scrape_all_subcategory_indexes(ctx: BrowserContext, categories):
-    sem = asyncio.Semaphore(5)
+    sem = asyncio.Semaphore(8)
     jobs = []
 
     for section in categories:
@@ -276,6 +287,63 @@ async def extract_categories_from_homepage(
     return categories
 
 
+async def scrape_product_overview(
+    ctx: BrowserContext, categories: List[Dict[str, Any]]
+):
+    sem = asyncio.Semaphore(6)
+    # jobs = []
+
+    entries_to_scrape = [
+        entry
+        for section in categories
+        for sub in section.get("subcategories", [])
+        for entry in sub.get("index_entries", [])
+    ]
+
+    # since we care for the subcategories (subsections) of each section (category)
+    # we would loop directly through just that and efficiently
+    # for sub in subcategories:
+    #     index_entries = sub.get("index_entries", [])
+    #     for entry in index_entries:
+
+    async def scrape_entry(entry: dict):
+        async with sem:
+            page = await ctx.new_page()
+            try:
+                await scrape_product_tile_detail(page, entry)
+            except Exception as e:
+                print(
+                    f"[WARN] Could not scrape product detail for {entry.get('href')}: {e}"
+                )
+            finally:
+                await page.close()
+
+        # jobs.append(scrape_entry())
+
+        # await asyncio.gather(*jobs)
+
+    await asyncio.gather(*(scrape_entry(entry) for entry in entries_to_scrape))
+
+
+async def scrape_product_tile_detail(page: Page, entry: dict[str, Any]):
+    url = entry.get("href")
+    if not url:
+        return
+
+    print(f"[-> ] Visiting product page: {url}")
+
+    await goto_with_retry(page, url)
+    await human_delay(0.5, 1.5)
+
+    try:
+        content = page.locator(".row.result-tab-flex")
+
+        print(await content.inner_html())
+
+    except Exception as e:
+        print(f"[!] Failed extracting innerHTML from {url}: {e}")
+
+
 async def entrypoint(page: Page, to_excel=False) -> None:
     print("[INFO] Attempting to perform scrapping...")
     scraped_data: Response = {}
@@ -296,9 +364,24 @@ async def entrypoint(page: Page, to_excel=False) -> None:
 
     # let's run it in parralel
     await scrape_all_subcategory_indexes(page.context, scraped_data["categories"])
-    # import pdb
 
-    # pdb.set_trace()
+    # we reuse the context from earlier, we would run this in parallel
+    # however, we want to goto each url of the indexes we have
+    # and extract every information of the "avaliable" products, manufacturer information,
+    # tags, etc
+    await scrape_product_overview(page.context, scraped_data["categories"])
+
+    # DEBUG: Dump first product raw HTML to file
+    try:
+        first_entry = scraped_data["categories"][0]["subcategories"][0][
+            "index_entries"
+        ][0]
+        raw_html = first_entry.get("__raw_html", "")
+        with open("tile_sample.html", "w", encoding="utf-8") as f:
+            f.write(raw_html)
+        print("[✓] Raw HTML sample saved to: tile_sample.html")
+    except Exception as e:
+        print(f"[WARN] Could not write raw HTML sample: {e}")
 
     print(f"[INFO] {scraped_data}")
 
@@ -313,4 +396,4 @@ async def entrypoint(page: Page, to_excel=False) -> None:
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(scrape_url(url, headless=False, to_excel=False))
+    asyncio.run(scrape_url(url, headless=False, to_excel=True))
