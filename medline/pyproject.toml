@@ -4,10 +4,6 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13.3"
-authors=["50-Course <eridotdev@proton.me>"]
-includes=[ {include= "src"} ]
-
-[tool.uv.dependencies.default]
 dependencies = [
     "alembic>=1.15.2",
     "beautifulsoup4>=4.13.4",
@@ -24,3 +20,6 @@ dependencies = [
     "sqlalchemy>=2.0.40",
     "sqlmodel>=0.0.24",
 ]
+authors=["50-Course <eridotdev@proton.me>"]
+includes=[ {include= "src"} ]
+
