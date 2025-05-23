@@ -368,8 +368,11 @@ async def extract_product_info_from_page(
                         next_page_url = await a_tag.get_attribute("href")
                         print(f"Redirect tile found, next page: {next_page_url}")
                         if next_page_url:
+                            print(f"[TRACE] Visiting paginated URL: {next_page_url}")
+
                             await page.goto(next_page_url)
-                            return extract_product_info_from_page(page, visited)
+
+                            return await extract_product_info_from_page(page, visited)
 
             manufacturer_img = await tile.query_selector("a.logo img")
             manufacturer_name = (
@@ -469,8 +472,9 @@ async def extract_product_info_from_page(
             }
             results.append(extracted_data)
 
-            if storage_ and product_title:
+            if storage_ is not None and product_title:
                 storage_.setdefault("products", []).append(extracted_data)
+
         except Exception as e:
             logger.exception(f"[WARN] Failed to extract tile: {e}", exc_info=True)
             continue
@@ -484,6 +488,8 @@ async def extract_all_pages(
 ):
     all_results = []
     page = await ctx.new_page()
+    visited = set()
+    visited.add(start_url)
 
     # NOTE: WE DON'T WANT TO USE SYNC PLAYWRIGHT HOW CAN
     # WE MAKE THIS STUFF WORK WITH OUR EXISTING CODE?
@@ -494,13 +500,14 @@ async def extract_all_pages(
     await page.goto(start_url, timeout=60000, wait_until="domcontentloaded")
 
     print("[INFO] page visit completed")
-    results = await extract_product_info_from_page(page, storage_=storage_)
+    results = await extract_product_info_from_page(
+        page, visited=visited, storage_=storage_
+    )
     all_results.extend(results)
 
     # paginate through additional pages
     pagination = await page.query_selector_all(".pagination-wrapper a:not(.next)")
     hrefs = []
-    visited = set()
 
     for anchor in pagination:
         try:
@@ -512,6 +519,11 @@ async def extract_all_pages(
             print(f"[WARN] Failed getting href from anchor: {e}")
 
     for href in hrefs:
+        if href in visited:
+            print(f"[DEBUG] Skipping already visited: {href}")
+            continue
+        visited.add(href)
+
         try:
             print(f"Navigating to: {href}")
             await page.goto(href, timeout=60000, wait_until="domcontentloaded")
