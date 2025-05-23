@@ -475,7 +475,9 @@ async def extract_all_pages(
             print(f"Navigating to: {href}")
             await page.goto(href, timeout=60000)
             all_results.extend(
-                extract_product_info_from_page(page, visited=visited, storage_=storage_)  # type: ignore
+                await extract_product_info_from_page(
+                    page, visited=visited, storage_=storage_
+                ) 
             )
 
     return all_results
