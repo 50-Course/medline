@@ -291,7 +291,7 @@ async def extract_categories_from_homepage(
 async def scrape_product_overview(
     ctx: BrowserContext, categories: List[Dict[str, Any]]
 ):
-    sem = asyncio.Semaphore(6)
+    sem = asyncio.Semaphore(5)
 
     entries_to_scrape = [
         entry
@@ -310,6 +310,7 @@ async def scrape_product_overview(
         async with sem:
             page = await ctx.new_page()
             try:
+                print(f"[->] Visiting product page: {entry.get('href')}")
                 # We should be instead calling the scrape all pages function
                 # on the entry link `entry[href]` and NOT THIS STUFF I HAVE BELOW
                 await scrape_product_tile_detail(page, entry, storage_=entry)
@@ -325,6 +326,7 @@ async def scrape_product_overview(
         # await asyncio.gather(*jobs)
 
     await asyncio.gather(*(scrape_entry(entry) for entry in entries_to_scrape))
+    print("[INFO] Completed all product overviews.")
 
 
 # NOTE: convert to async
@@ -498,6 +500,7 @@ async def extract_all_pages(
     #
     print("[INFO] attempting to visit website")
     await page.goto(start_url, timeout=60000, wait_until="domcontentloaded")
+    await page.wait_for_selector("div.product-tile", timeout=15000)
 
     print("[INFO] page visit completed")
     results = await extract_product_info_from_page(
@@ -552,11 +555,17 @@ async def scrape_product_tile_detail(
 
     print(f"[-> ] Visiting product page: {url}")
     try:
-        await extract_all_pages(page.context, url, storage_=storage_)
+        # await extract_all_pages(page.context, url, storage_=storage_)
+        await page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        await page.wait_for_selector("div.product-tile", timeout=15000)
+
+        results = await extract_product_info_from_page(page, storage_=storage_)
+
+        print(f"[✓] Scraped {len(results)} products from {url}")
+
     except Exception as e:
         print(f"[!] Failed extracting innerHTML from {url}: {e}")
         logger.error(str(e), exc_info=True)
-        raise
 
 
 async def entrypoint(page: Page, to_excel=False) -> None:
