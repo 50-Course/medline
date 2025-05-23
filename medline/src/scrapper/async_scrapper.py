@@ -332,116 +332,148 @@ async def extract_product_info_from_page(
     page: Page, visited: Optional[dict] = {}, storage_: Optional[Response] = None
 ):
     print("[INFO] entered the product info function... ")
+
+    try:
+        await page.wait_for_selector(
+            "div.product-tile", timeout=50000, state="attached"
+        )
+        print("[INFO] Found some product tiles...")
+    except Exception as e:
+        print(f"[WARN] Product tiles never appeared: {e}")
+        return []
+
     product_tiles = await page.query_selector_all("div.product-tile")
 
     print(f"Found: {len(product_tiles)} product tiles")
     results = []
 
     for tile in product_tiles:
-        # Check for "See more products" tile
-        see_more_element = await tile.query_selector("#nextButton span.short-name")
-        if see_more_element:
-            print(
-                "[INFO] This is a paginated webpage... attempting to visit other pages first"
+        try:
+            # Check for "See more products" tile
+            see_more_element = await tile.query_selector("#nextButton span.short-name")
+            if see_more_element:
+                print(
+                    "[INFO] This is a paginated webpage... attempting to visit other pages first"
+                )
+                text = (
+                    (await see_more_element.inner_text())
+                    .strip()
+                    .lower()
+                    .replace("\n", "")
+                )
+
+                if "see more" in text:
+                    a_tag = await tile.query_selector("#nextButton a")
+                    if a_tag:
+                        next_page_url = await a_tag.get_attribute("href")
+                        print(f"Redirect tile found, next page: {next_page_url}")
+                        if next_page_url:
+                            await page.goto(next_page_url)
+                            return extract_product_info_from_page(page, visited)
+
+            manufacturer_img = await tile.query_selector("a.logo img")
+            manufacturer_name = (
+                await manufacturer_img.get_attribute("alt")
+                if manufacturer_img
+                else None
             )
-            text = (
-                (await see_more_element.inner_text()).strip().lower().replace("\n", "")
+            manufacturer_logo = (
+                await manufacturer_img.get_attribute("data-src")
+                or await manufacturer_img.get_attribute("src")
+                if manufacturer_img
+                else None
             )
 
-            if "see more" in text:
-                a_tag = await tile.query_selector("#nextButton a")
-                if a_tag:
-                    next_page_url = await a_tag.get_attribute("href")
-                    print(f"Redirect tile found, next page: {next_page_url}")
-                    if next_page_url:
-                        await page.goto(next_page_url)
-                        return extract_product_info_from_page(page, visited)
+            title_element = await tile.query_selector("h3.short-name")
+            product_title = (
+                (await title_element.inner_text()).strip() if title_element else None
+            )
 
-        manufacturer_img = await tile.query_selector("a.logo img")
-        manufacturer_name = (
-            await manufacturer_img.get_attribute("alt") if manufacturer_img else None
-        )
-        manufacturer_logo = (
-            await manufacturer_img.get_attribute("data-src")
-            or await manufacturer_img.get_attribute("src")
-            if manufacturer_img
-            else None
-        )
+            # Skip placeholder content
+            if product_title and "{{" in product_title:
+                product_title = "Unknown Title"
 
-        title_element = await tile.query_selector("h3.short-name")
-        product_title = (
-            (await title_element.inner_text()).strip() if title_element else None
-        )
+            model_element = await tile.query_selector("h3.short-name > span.brand")
+            product_model = (
+                (await model_element.inner_text()).strip() if model_element else None
+            )
 
-        # Skip placeholder content
-        if product_title and "{{" in product_title:
-            product_title = "Unknown Title"
+            model_number_element = await tile.query_selector("div.model")
+            model_number = (
+                (await model_number_element.inner_text()).strip()
+                if model_number_element
+                else None
+            )
 
-        model_element = await tile.query_selector("h3.short-name > span.brand")
-        product_model = (
-            (await model_element.inner_text()).strip() if model_element else None
-        )
+            try:
+                feature_elements = await tile.query_selector_all(
+                    "div.feature-values-container span"
+                )
+                features = (
+                    [await f.inner_text() for f in feature_elements]
+                    if feature_elements
+                    else []
+                )
+            except Exception as e:
+                print(f"[WARN] Could not extract features: {e}")
+                features = []
 
-        model_number_element = await tile.query_selector("div.model")
-        model_number = (
-            (await model_number_element.inner_text()).strip()
-            if model_number_element
-            else None
-        )
+            tile_img_element = await tile.query_selector(".inset-img img")
+            tile_img_src = (
+                await tile_img_element.get_attribute("src")
+                if tile_img_element
+                else None
+            )
+            tile_img_alt = (
+                await tile_img_element.get_attribute("alt")
+                if tile_img_element
+                else None
+            )
 
-        feature_elements = await tile.query_selector_all(
-            "div.feature-values-container span"
-        )
-        features = (
-            [(await feature.inner_text()).strip() for feature in feature_elements]
-            if feature_elements
-            else []
-        )
+            price_element = await tile.query_selector("div.price span.js-price-content")
+            price = (
+                (await price_element.inner_text()).strip() if price_element else None
+            )
+            currency = (
+                await price_element.get_attribute("data-currency")
+                if price_element
+                else None
+            )
 
-        tile_img_element = await tile.query_selector(".inset-img img")
-        tile_img_src = (
-            await tile_img_element.get_attribute("src") if tile_img_element else None
-        )
-        tile_img_alt = (
-            await tile_img_element.get_attribute("alt") if tile_img_element else None
-        )
+            product_link = await extract_product_link_from_tile(tile)
 
-        price_element = await tile.query_selector("div.price span.js-price-content")
-        price = (await price_element.inner_text()).strip() if price_element else None
-        currency = (
-            await price_element.get_attribute("data-currency")
-            if price_element
-            else None
-        )
+            try:
+                description_element = await tile.query_selector("p.description-text")
+                description = (
+                    (await description_element.inner_text()).strip()
+                    if description_element
+                    else None
+                )
+            except Exception as e:
+                logger.error(f"[ERROR]: {str(e)}", exc_info=True)
+                description = None
 
-        product_link = await extract_product_link_from_tile(tile)
+            extracted_data = {
+                "manufacturer_name": manufacturer_name,
+                "manufacturer_logo": manufacturer_logo,
+                "product_title": product_title,
+                "product_model": product_model,
+                "model_number": model_number,
+                "features": features,
+                "price": price,
+                "currency": currency,
+                "product_link": product_link,
+                "tile_image_src": tile_img_src,
+                "tile_image_alt": tile_img_alt,
+                "tile_description": description,
+            }
+            results.append(extracted_data)
 
-        description_element = await tile.query_selector("p.description-text")
-        description = (
-            (await description_element.inner_text()).strip()
-            if description_element
-            else None
-        )
-
-        extracted_data = {
-            "manufacturer_name": manufacturer_name,
-            "manufacturer_logo": manufacturer_logo,
-            "product_title": product_title,
-            "product_model": product_model,
-            "model_number": model_number,
-            "features": features,
-            "price": price,
-            "currency": currency,
-            "product_link": product_link,
-            "tile_image_src": tile_img_src,
-            "tile_image_alt": tile_img_alt,
-            "tile_description": description,
-        }
-        results.append(extracted_data)
-
-        if storage_ and product_title:
-            # storage_[f"{product_title.split('\n')[0]}"] = extracted_data
-            storage_.setdefault("products", []).append(extracted_data)
+            if storage_ and product_title:
+                storage_.setdefault("products", []).append(extracted_data)
+        except Exception as e:
+            logger.exception(f"[WARN] Failed to extract tile: {e}", exc_info=True)
+            continue
 
     return results
 
@@ -462,7 +494,8 @@ async def extract_all_pages(
     await page.goto(start_url, timeout=60000, wait_until="domcontentloaded")
 
     print("[INFO] page visit completed")
-    all_results.extend(await extract_product_info_from_page(page, storage_=storage_))
+    results = await extract_product_info_from_page(page, storage_=storage_)
+    all_results.extend(results)
 
     # paginate through additional pages
     pagination = await page.query_selector_all(".pagination-wrapper a:not(.next)")
@@ -472,8 +505,8 @@ async def extract_all_pages(
     for anchor in pagination:
         try:
             href = await anchor.get_attribute("href")
-            if href and href not in visited:
-                visited.add(href)
+            if href:
+                # visited.add(href)
                 hrefs.append(href)
         except Exception as e:
             print(f"[WARN] Failed getting href from anchor: {e}")
@@ -482,16 +515,16 @@ async def extract_all_pages(
         try:
             print(f"Navigating to: {href}")
             await page.goto(href, timeout=60000, wait_until="domcontentloaded")
-            all_results.extend(
-                await extract_product_info_from_page(
-                    page,
-                    visited=visited,  # type: ignore
-                    storage_=storage_,
-                )
+            results = await extract_product_info_from_page(
+                page,
+                visited=visited,  # type: ignore
+                storage_=storage_,
             )
+            all_results.extend(results)
         except Exception as e:
             print(f"[WARN] Failed to visit pagination link: {href}: {e}")
 
+    await page.close()
     return all_results
 
 
