@@ -466,19 +466,31 @@ async def extract_all_pages(
 
     # paginate through additional pages
     pagination = await page.query_selector_all(".pagination-wrapper a:not(.next)")
+    hrefs = []
     visited = set()
 
     for anchor in pagination:
-        href = await anchor.get_attribute("href")
-        if href and href not in visited:
-            visited.add(href)
+        try:
+            href = await anchor.get_attribute("href")
+            if href and href not in visited:
+                visited.add(href)
+                hrefs.append(href)
+        except Exception as e:
+            print(f"[WARN] Failed getting href from anchor: {e}")
+
+    for href in hrefs:
+        try:
             print(f"Navigating to: {href}")
-            await page.goto(href, timeout=60000)
+            await page.goto(href, timeout=60000, wait_until="domcontentloaded")
             all_results.extend(
                 await extract_product_info_from_page(
-                    page, visited=visited, storage_=storage_
-                ) 
+                    page,
+                    visited=visited,  # type: ignore
+                    storage_=storage_,
+                )
             )
+        except Exception as e:
+            print(f"[WARN] Failed to visit pagination link: {href}: {e}")
 
     return all_results
 
