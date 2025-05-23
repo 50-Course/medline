@@ -345,10 +345,8 @@ async def extract_product_info_from_page(
                 "[INFO] This is a paginated webpage... attempting to visit other pages first"
             )
             text = (
-                await (see_more_element.inner_text()).strip().lower().replace("\n", "")
+                (await see_more_element.inner_text()).strip().lower().replace("\n", "")
             )
-
-            breakpoint()
 
             if "see more" in text:
                 a_tag = await tile.query_selector("#nextButton a")
@@ -372,7 +370,7 @@ async def extract_product_info_from_page(
 
         title_element = await tile.query_selector("h3.short-name")
         product_title = (
-            await (title_element.inner_text()).strip() if title_element else None
+            (await title_element.inner_text()).strip() if title_element else None
         )
 
         # Skip placeholder content
@@ -381,12 +379,12 @@ async def extract_product_info_from_page(
 
         model_element = await tile.query_selector("h3.short-name > span.brand")
         product_model = (
-            await (model_element.inner_text()).strip() if model_element else None
+            (await model_element.inner_text()).strip() if model_element else None
         )
 
         model_number_element = await tile.query_selector("div.model")
         model_number = (
-            await (model_number_element.inner_text()).strip()
+            (await model_number_element.inner_text()).strip()
             if model_number_element
             else None
         )
@@ -395,7 +393,7 @@ async def extract_product_info_from_page(
             "div.feature-values-container span"
         )
         features = (
-            [await (feature.inner_text()).strip() for feature in feature_elements]
+            [(await feature.inner_text()).strip() for feature in feature_elements]
             if feature_elements
             else []
         )
@@ -409,7 +407,7 @@ async def extract_product_info_from_page(
         )
 
         price_element = await tile.query_selector("div.price span.js-price-content")
-        price = await (price_element.inner_text()).strip() if price_element else None
+        price = (await price_element.inner_text()).strip() if price_element else None
         currency = (
             await price_element.get_attribute("data-currency")
             if price_element
@@ -420,7 +418,7 @@ async def extract_product_info_from_page(
 
         description_element = await tile.query_selector("p.description-text")
         description = (
-            await (description_element.inner_text()).strip()
+            (await description_element.inner_text()).strip()
             if description_element
             else None
         )
@@ -475,7 +473,7 @@ async def extract_all_pages(
         if href and href not in visited:
             visited.add(href)
             print(f"Navigating to: {href}")
-            await page.goto(href)
+            await page.goto(href, timeout=60000)
             all_results.extend(
                 extract_product_info_from_page(page, visited=visited, storage_=storage_)  # type: ignore
             )
@@ -498,6 +496,8 @@ async def scrape_product_tile_detail(
         await extract_all_pages(page.context, url, storage_=storage_)
     except Exception as e:
         print(f"[!] Failed extracting innerHTML from {url}: {e}")
+        logger.error(str(e), exc_info=True)
+        raise
 
 
 async def entrypoint(page: Page, to_excel=False) -> None:
