@@ -2,8 +2,13 @@ import asyncio
 from typing import Optional
 from warnings import deprecated
 
-from playwright.async_api import (ElementHandle, JSHandle, Locator, Page,
-                                  async_playwright)
+from playwright.async_api import (
+    ElementHandle,
+    JSHandle,
+    Locator,
+    Page,
+    async_playwright,
+)
 
 from .utils import extract_product_link_from_tile
 
@@ -23,8 +28,6 @@ async def scrape_product_overview_tiles(page: Page) -> list:
                 result_data.append(tile_data)
 
     await handle_pagination(page, result_data)
-
-    # print(result_data)
     print(f"Total tiles scraped: {len(result_data)}")
     return result_data
 
@@ -112,6 +115,10 @@ async def _extract_manufacturer_img(tile: ElementHandle) -> dict:
 
 
 async def scrape_paginated_data(page_url: str, result_data: list):
+    """
+    Visits a paginated page and scrapes the product tiles.
+    It reuses the `scrape_tile_data` function for extracting product tile data.
+    """
     try:
         async with async_playwright() as p:
             browser = await p.firefox.launch()
@@ -121,35 +128,14 @@ async def scrape_paginated_data(page_url: str, result_data: list):
             await page.goto(page_url, wait_until="domcontentloaded", timeout=65000)
 
             print(f"[INFO] Visit successful to paginated page: {page_url}")
-
-            # Scrape product tiles on this page
             product_tiles = await page.query_selector_all(".product-tile")
 
-            # Extract data from each product tile on this page
             for tile in product_tiles:
-                product_title = await _extract_product_title_from_tile(tile)
-
-                if product_title and "{{" in product_title:
-                    print("[DEBUG] Placeholder product title discovered... skipping...")
-                    continue
-
-                elif product_title and "See more products" in product_title:
-                    print("[DEBUG] 'See more products' tile found... skipping...")
-                    continue
-
-                product_data = {
-                    "manufacturer_img": await _extract_manufacturer_img(tile),
-                    "tile_img": await _extract_tile_img(tile),
-                    "tile_description": await _extract_short_form_tile_desc(tile),
-                    "has_video": await _has_video_tag(tile),
-                    "features": await _extract_product_features(tile),
-                    "product_link": await _extract_product_link(tile),
-                }
-
-                result_data.append(product_data)
+                tile_data = await scrape_tile_data(tile)
+                if tile_data:
+                    result_data.append(tile_data)
 
             await browser.close()
-
     except Exception as e:
         print(f"[ERROR] Failed to scrape page {page_url}: {e}")
 
