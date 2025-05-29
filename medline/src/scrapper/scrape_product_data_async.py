@@ -1,3 +1,7 @@
+"""
+Allows us to extract the full product data of a given product
+"""
+
 import asyncio
 from typing import Literal, Optional
 
