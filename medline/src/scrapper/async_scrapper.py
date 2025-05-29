@@ -18,6 +18,9 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
+from src.scrapper.scrape_product_data_async import extract_product_data_async
+from src.scrapper.scrape_product_tiles_async import scrape_product_overview_tiles
+
 from .constants import (
     SELECTOR_CATEGORY_ITEM,
     SELECTOR_CATEGORY_LABEL,
@@ -304,20 +307,44 @@ async def scrape_product_overview(
         for entry in sub.get("index_entries", [])
     ]
 
-    # since we care for the subcategories (subsections) of each section (category)
-    # we would loop directly through just that and efficiently
-    # for sub in subcategories:
-    #     index_entries = sub.get("index_entries", [])
-    #     for entry in index_entries:
-
     async def scrape_entry(entry):
         async with sem:
             page = await ctx.new_page()
             try:
-                print(f"[->] Visiting product index page: {entry.get('href')}")
-                # We should be instead calling the scrape all pages function
-                # on the entry link `entry[href]` and NOT THIS STUFF I HAVE BELOW
-                await scrape_product_tile_detail(page, entry, storage_=entry)
+                print(f"[->] Visiting product tile index page: {entry.get('href')}")
+                # # We should be instead calling the scrape all pages function
+                # # on the entry link `entry[href]` and NOT THIS STUFF I HAVE BELOW
+                # await scrape_product_tile_detail(page, entry, storage_=entry)
+
+                await page.goto(
+                    entry["href"], timeout=60000, wait_until="domcontentloaded"
+                )
+
+                # operation 3: scrape all product tiles in this entry
+                tile_data = await scrape_product_overview_tiles(page)
+
+                # operation 4: for each product tile link, visit and extract full product data
+                full_product_details = []
+                for tile in tile_data:
+                    product_url = tile.get("product_link")
+                    if not product_url:
+                        continue
+                    try:
+                        print(f"[->->] Visiting product detail: {product_url}")
+                        await page.goto(
+                            product_url, timeout=60000, wait_until="domcontentloaded"
+                        )
+                        full_data = await extract_product_data_async(page)
+                        full_product_details.append({**tile, **full_data})
+                    except Exception as e:
+                        print(
+                            f"[WARN] Failed to extract full product at {product_url}: {e}"
+                        )
+                        continue
+
+                entry["products"] = full_product_details
+                print(f"[✓] Completed scraping for index entry: {entry.get('title')}")
+
             except Exception as e:
                 print(
                     f"[WARN] Could not scrape product detail for {entry.get('href')}: {e}"
@@ -325,12 +352,8 @@ async def scrape_product_overview(
             finally:
                 await page.close()
 
-        # jobs.append(scrape_entry())
-
-        # await asyncio.gather(*jobs)
-
     await asyncio.gather(*(scrape_entry(entry) for entry in entries_to_scrape))
-    print("[INFO] Completed all product overviews.")
+    print("[INFO] Completed all tile + full product detail extractions.")
 
 
 # NOTE: convert to async
