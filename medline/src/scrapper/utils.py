@@ -354,39 +354,3 @@ async def safe_inner_text(locator: Locator) -> str | None:
     except Exception:
         pass
     return None
-
-
-# TODO: refactor into composale functions
-# def write_category_to_excel(
-#     categories: List[Dict[str, Any]],
-#     filename: str = "scraped_expo_data.xlsx",
-#     output_dir: Path | None = None,
-# ):
-#     if output_dir is None:
-#         base_dir = Path(__file__).resolve().parent
-#         output_dir = base_dir / "exports"
-#         output_dir.mkdir(parents=True, exist_ok=True)
-#
-#     output_path = output_dir / filename
-#
-#     wb = Workbook()
-#     worksheet = wb.active
-#     worksheet.title = "CATEGORIES CATALOG"
-#
-#     headers = ["Category", "Subcategory", "URL"]
-#     worksheet.append(headers)
-#
-#     for category in categories:
-#         category_name = category["section"]
-#         for sub in category["subcategories"]:
-#             worksheet.append([category_name, sub["name"], sub["url"]])
-#
-#     # Optional: auto-adjust column widths
-#     for col in worksheet.columns:
-#         max_length = max(len(str(cell.value or "")) for cell in col)
-#         adjusted_width = max_length + 2
-#         col_letter = get_column_letter(col[0].column)  # type: ignore
-#         worksheet.column_dimensions[col_letter].width = adjusted_width
-#
-#     wb.save(output_path)
-#     print(f"[✓] Excel file saved to: {output_path}")
