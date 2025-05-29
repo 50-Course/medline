@@ -176,11 +176,26 @@ async def _extract_product_img_urls(page: Page) -> list:
 async def _extract_product_price(
     page: Page,
 ) -> tuple[str | None, Literal["USD"] | None]:
-    # returns the product price and currency
-    price = page.locator('div[class*="mainSupplier__PriceValue"] span')
-    price = (await price.inner_text()).strip() or None
-    currency = "USD" if price and "$" in price else None
-    return price, currency
+    """
+    Extracts product price and currency if present.
+    Returns (price, currency) or (None, None).
+    """
+    ""
+    try:
+        price_el = page.locator('div[class*="mainSupplier__PriceValue"] span')
+        # failsafe, incase, there is no price on the page
+        if await price_el.count() > 0:
+            raw_price = await price_el.inner_text()
+            if raw_price:
+                raw_price = raw_price.strip()
+                currency = "USD" if "$" in raw_price else None
+                return raw_price, currency
+        else:
+            print(f"[INFO] Price element not found on {page.url}")
+    except Exception as e:
+        print(f"[WARN] Exception during price extraction: {e}")
+
+    return None, None
 
 
 async def run_playwright():
