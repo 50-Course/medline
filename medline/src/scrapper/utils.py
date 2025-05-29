@@ -354,3 +354,9 @@ async def safe_inner_text(locator: Locator) -> str | None:
     except Exception:
         pass
     return None
+
+
+async def is_valid_product_page(page: Page) -> bool:
+    # we check if a product page is valid by searching for the product tile
+    title_block = page.locator('span[class^="sc-2mcr2-0"]')
+    return await title_block.count() > 0
