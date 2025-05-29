@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
-from playwright.async_api import Locator, Page, async_playwright
+from playwright.async_api import ElementHandle, Locator, Page, async_playwright
 from playwright.sync_api import BrowserContext
 
 from .constants import USER_AGENTS as BROWSER_AGENTS
@@ -319,63 +319,89 @@ def write_product_entry_to_excel(
     print(f"[✓] Saved: {path}")
 
 
-async def extract_product_link_from_tile(tile):
+async def extract_product_link_from_tile(tile: ElementHandle) -> str | None:
     """
-    Attempts to extract the product link from a product tile element using multiple strategies.
-
-    Either:
-    - Direct refs
-    - Through onClick refs
-    - data-url/attributes refs
-    - decorator links
+    Extracts the actual product link from a product tile.
+    Targets the <a> that wraps an <h3 class="short-name">.
     """
-    # Look for a direct <a href="...">
+    import re
+
     try:
-        link_el = await tile.query_selector("a[href]")
-        if link_el:
-            href = await link_el.get_attribute("href")
-            if href:
-                return href
+        # grabs the <h3> element that indicates a product link
+        h3_el = await tile.query_selector("a[href] > h3.short-name")
+        if h3_el:
+            # walk back to the parent <a>
+            parent_a = await h3_el.evaluate_handle("node => node.parentElement")
+            if parent_a:
+                href = await parent_a.get_attribute("href")
+                if href and re.match(
+                    r"^https://www\.medicalexpo\.com/prod/.+/product-\d+-\d+\.html$",
+                    href,
+                ):
+                    return href
     except Exception as e:
-        print(f"[WARN] Failed to get href from direct a tag: {e}")
-
-    # Look for onclick handler with location.href
-    try:
-        onclick = await tile.get_attribute("onclick")
-        if onclick and "location.href" in onclick:
-            # Example format: onclick="location.href='/products/123'"
-            parts = onclick.split("location.href=")
-            if len(parts) > 1:
-                link_candidate = parts[1].strip("';\" ")
-                if link_candidate:
-                    return link_candidate
-    except Exception as e:
-        pass
-
-    for attr in ["data-url", "data-href", "decorator"]:
-        try:
-            val = await tile.get_attribute(attr)
-            if val:
-                if attr == "decorator" and "linkRender" in val:
-                    return val.split("linkRender('")[1].split("'")[0]
-                return val
-        except Exception as e:
-            print(f"[WARN] Error reading {attr}: {e}")
-
-    # # Look for data-url or data-href attributes
-    # data_link = await tile.get_attribute("data-url") or tile.get_attribute("data-href")
-    # if data_link:
-    #     return data_link
-    #
-    # # Fallback; If it has a custom attribute like decorator="linkRender('/path')"
-    # decorator_attr = await tile.get_attribute("decorator")
-    # if decorator_attr and "linkRender" in decorator_attr:
-    #     try:
-    #         return decorator_attr.split("linkRender('")[1].split("'")[0]
-    #     except IndexError:
-    #         pass
+        print(f"[ERROR] Could not extract product link: {e}")
 
     return None
+
+
+# async def extract_product_link_from_tile(tile):
+#     """
+#     Attempts to extract the product link from a product tile element using multiple strategies.
+#
+#     Either:
+#     - Direct refs
+#     - Through onClick refs
+#     - data-url/attributes refs
+#     - decorator links
+#     """
+#     # Look for a direct <a href="...">
+#     try:
+#         link_el = await tile.query_selector("a[href]")
+#         if link_el:
+#             href = await link_el.get_attribute("href")
+#             if href:
+#                 return href
+#     except Exception as e:
+#         print(f"[WARN] Failed to get href from direct a tag: {e}")
+#
+#     # Look for onclick handler with location.href
+#     try:
+#         onclick = await tile.get_attribute("onclick")
+#         if onclick and "location.href" in onclick:
+#             # Example format: onclick="location.href='/products/123'"
+#             parts = onclick.split("location.href=")
+#             if len(parts) > 1:
+#                 link_candidate = parts[1].strip("';\" ")
+#                 if link_candidate:
+#                     return link_candidate
+#     except Exception as e:
+#         pass
+#
+#     for attr in ["data-url", "data-href", "decorator"]:
+#         try:
+#             val = await tile.get_attribute(attr)
+#             if val:
+#                 if attr == "decorator" and "linkRender" in val:
+#                     return val.split("linkRender('")[1].split("'")[0]
+#                 return val
+#         except Exception as e:
+#             print(f"[WARN] Error reading {attr}: {e}")
+#
+# # Look for data-url or data-href attributes
+# data_link = await tile.get_attribute("data-url") or tile.get_attribute("data-href")
+# if data_link:
+#     return data_link
+#
+# # Fallback; If it has a custom attribute like decorator="linkRender('/path')"
+# decorator_attr = await tile.get_attribute("decorator")
+# if decorator_attr and "linkRender" in decorator_attr:
+#     try:
+#         return decorator_attr.split("linkRender('")[1].split("'")[0]
+#     except IndexError:
+#         pass
+
+# return None
 
 
 def extract_all_pages(ctx: BrowserContext, start_url: str):
