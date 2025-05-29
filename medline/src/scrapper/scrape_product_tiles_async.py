@@ -14,6 +14,9 @@ from .utils import extract_product_link_from_tile
 
 
 async def scrape_product_overview_tiles(page: Page) -> list:
+    """
+    Entrypoint function to scrape all product tiles belonging to an index entry
+    """
     result_data = []
 
     product_tiles = await page.query_selector_all(".product-tile")
