@@ -45,6 +45,10 @@ from .utils import (
     write_category_to_excel,
 )
 
+# from src.scrapper.scrape_product_data_async import extract_product_data_async
+# from src.scrapper.scrape_product_detail import extract_product_data
+
+
 logger = logging.getLogger(__name__)
 
 url: str = "https://www.medicalexpo.com/"
@@ -310,7 +314,7 @@ async def scrape_product_overview(
         async with sem:
             page = await ctx.new_page()
             try:
-                print(f"[->] Visiting product page: {entry.get('href')}")
+                print(f"[->] Visiting product index page: {entry.get('href')}")
                 # We should be instead calling the scrape all pages function
                 # on the entry link `entry[href]` and NOT THIS STUFF I HAVE BELOW
                 await scrape_product_tile_detail(page, entry, storage_=entry)
@@ -573,6 +577,8 @@ async def entrypoint(page: Page, to_excel=False) -> None:
     scraped_data: Response = {}
 
     # categories = await extract_categories_from_homepage(page, storage_=scraped_data)
+
+    # OPERATION 1
     categories = await extract_categories_from_homepage(page)
 
     if categories:
@@ -587,17 +593,21 @@ async def entrypoint(page: Page, to_excel=False) -> None:
     #         )
 
     # let's run it in parralel
+    # Operation 2
     await scrape_all_subcategory_indexes(page.context, scraped_data["categories"])
 
+    # OPERATION 3
+    #
     # NOTE: we reuse the context from earlier, we would run this in parallel
     # however, we want to goto each url of the indexes we have
     # and extract every information of the "avaliable" products, manufacturer information,
     # tags, etc
     # we look through each and every product links of index_entries, and head out to the
     # links on there
-    await scrape_product_overview(page.context, scraped_data["categories"])
+    # await scrape_product_overview(page.context, scraped_data["categories"])
 
-    print(f"[INFO] {scraped_data}")
+    # print(f"[INFO] {scraped_data}")
+    print(f"[INFO] Successfully scraped website")
 
     if to_excel and "categories" in scraped_data:
         print("[DEBUG] Writing extracted categories to Excel file...")
