@@ -627,10 +627,10 @@ async def entrypoint(page: Page, to_excel=False) -> None:
     # tags, etc
     # we look through each and every product links of index_entries, and head out to the
     # links on there
-    # await scrape_product_overview(page.context, scraped_data["categories"])
+    await scrape_product_overview(page.context, scraped_data["categories"])
 
     # print(f"[INFO] {scraped_data}")
-    print(f"[INFO] Successfully scraped website")
+    print("[INFO] Successfully scraped website")
 
     if to_excel and "categories" in scraped_data:
         print("[DEBUG] Writing extracted categories to Excel file...")
