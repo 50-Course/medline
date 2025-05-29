@@ -331,7 +331,7 @@ async def scrape_product_overview(
 
                         # I have just discovered some product link causes redirect breaking
                         # our `extract_product_data_async` logic
-                        if not is_valid_product_page(page):
+                        if not await is_valid_product_page(page):
                             print(
                                 f"[WARN] Product page appears to be invalid, removed or moved permanently: {product_url}"
                             )
