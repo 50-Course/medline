@@ -44,6 +44,7 @@ from .utils import (
     get_random_user_agent,
     goto_with_retry,
     human_delay,
+    is_valid_product_page,
     retry_with_backoff,
     write_category_to_excel,
 )
@@ -330,6 +331,12 @@ async def scrape_product_overview(
 
                         # I have just discovered some product link causes redirect breaking
                         # our `extract_product_data_async` logic
+                        if not is_valid_product_page(page):
+                            print(
+                                f"[WARN] Product page appears to be invalid, removed or moved permanently: {product_url}"
+                            )
+                            print(f"[SKIP] Soft 404 or placeholder page: {product_url}")
+                            continue
 
                         full_data = await extract_product_data_async(page)
                         full_product_details.append({**tile, **full_data})
