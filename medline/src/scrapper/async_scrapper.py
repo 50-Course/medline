@@ -48,10 +48,6 @@ from .utils import (
     write_category_to_excel,
 )
 
-# from src.scrapper.scrape_product_data_async import extract_product_data_async
-# from src.scrapper.scrape_product_detail import extract_product_data
-
-
 logger = logging.getLogger(__name__)
 
 url: str = "https://www.medicalexpo.com/"
@@ -312,10 +308,6 @@ async def scrape_product_overview(
             page = await ctx.new_page()
             try:
                 print(f"[->] Visiting product tile index page: {entry.get('href')}")
-                # # We should be instead calling the scrape all pages function
-                # # on the entry link `entry[href]` and NOT THIS STUFF I HAVE BELOW
-                # await scrape_product_tile_detail(page, entry, storage_=entry)
-
                 await page.goto(
                     entry["href"], timeout=60000, wait_until="domcontentloaded"
                 )
@@ -329,11 +321,16 @@ async def scrape_product_overview(
                     product_url = tile.get("product_link")
                     if not product_url:
                         continue
+
                     try:
-                        print(f"[->->] Visiting product detail: {product_url}")
+                        print(f"[->->] Visiting product link: {product_url}")
                         await page.goto(
                             product_url, timeout=60000, wait_until="domcontentloaded"
                         )
+
+                        # I have just discovered some product link causes redirect breaking
+                        # our `extract_product_data_async` logic
+
                         full_data = await extract_product_data_async(page)
                         full_product_details.append({**tile, **full_data})
                     except Exception as e:
@@ -356,250 +353,9 @@ async def scrape_product_overview(
     print("[INFO] Completed all tile + full product detail extractions.")
 
 
-# NOTE: convert to async
-async def extract_product_info_from_page(
-    page: Page, visited: Optional[dict] = {}, storage_: Optional[Response] = None
-):
-    print("[INFO] entered the product info function... ")
-
-    try:
-        await page.wait_for_selector(
-            "div.product-tile", timeout=50000, state="attached"
-        )
-        print("[INFO] Found some product tiles...")
-    except Exception as e:
-        print(f"[WARN] Product tiles never appeared: {e}")
-        return []
-
-    product_tiles = await page.query_selector_all("div.product-tile")
-
-    print(f"Found: {len(product_tiles)} product tiles")
-    results = []
-
-    for tile in product_tiles:
-        try:
-            # Check for "See more products" tile
-            see_more_element = await tile.query_selector("#nextButton span.short-name")
-            if see_more_element:
-                print(
-                    "[INFO] This is a paginated webpage... attempting to visit other pages first"
-                )
-                text = (
-                    (await see_more_element.inner_text())
-                    .strip()
-                    .lower()
-                    .replace("\n", "")
-                )
-
-                if "see more" in text:
-                    a_tag = await tile.query_selector("#nextButton a")
-                    if a_tag:
-                        next_page_url = await a_tag.get_attribute("href")
-                        print(f"Redirect tile found, next page: {next_page_url}")
-                        if next_page_url:
-                            print(f"[TRACE] Visiting paginated URL: {next_page_url}")
-
-                            await page.goto(next_page_url)
-
-                            return await extract_product_info_from_page(page, visited)
-
-            manufacturer_img = await tile.query_selector("a.logo img")
-            manufacturer_name = (
-                await manufacturer_img.get_attribute("alt")
-                if manufacturer_img
-                else None
-            )
-            manufacturer_logo = (
-                await manufacturer_img.get_attribute("data-src")
-                or await manufacturer_img.get_attribute("src")
-                if manufacturer_img
-                else None
-            )
-
-            title_element = await tile.query_selector("h3.short-name")
-            product_title = (
-                (await title_element.inner_text()).strip() if title_element else None
-            )
-
-            # Skip placeholder content
-            if product_title and "{{" in product_title:
-                product_title = "Unknown Title"
-
-            model_element = await tile.query_selector("h3.short-name > span.brand")
-            product_model = (
-                (await model_element.inner_text()).strip() if model_element else None
-            )
-
-            model_number_element = await tile.query_selector("div.model")
-            model_number = (
-                (await model_number_element.inner_text()).strip()
-                if model_number_element
-                else None
-            )
-
-            try:
-                feature_elements = await tile.query_selector_all(
-                    "div.feature-values-container span"
-                )
-                features = (
-                    [await f.inner_text() for f in feature_elements]
-                    if feature_elements
-                    else []
-                )
-            except Exception as e:
-                print(f"[WARN] Could not extract features: {e}")
-                features = []
-
-            tile_img_element = await tile.query_selector(".inset-img img")
-            tile_img_src = (
-                await tile_img_element.get_attribute("src")
-                if tile_img_element
-                else None
-            )
-            tile_img_alt = (
-                await tile_img_element.get_attribute("alt")
-                if tile_img_element
-                else None
-            )
-
-            price_element = await tile.query_selector("div.price span.js-price-content")
-            price = (
-                (await price_element.inner_text()).strip() if price_element else None
-            )
-            currency = (
-                await price_element.get_attribute("data-currency")
-                if price_element
-                else None
-            )
-
-            product_link = await extract_product_link_from_tile(tile)
-
-            try:
-                description_element = await tile.query_selector("p.description-text")
-                description = (
-                    (await description_element.inner_text()).strip()
-                    if description_element
-                    else None
-                )
-            except Exception as e:
-                logger.error(f"[ERROR]: {str(e)}", exc_info=True)
-                description = None
-
-            extracted_data = {
-                "manufacturer_name": manufacturer_name,
-                "manufacturer_logo": manufacturer_logo,
-                "product_title": product_title,
-                "product_model": product_model,
-                "model_number": model_number,
-                "features": features,
-                "price": price,
-                "currency": currency,
-                "product_link": product_link,
-                "tile_image_src": tile_img_src,
-                "tile_image_alt": tile_img_alt,
-                "tile_description": description,
-            }
-            results.append(extracted_data)
-
-            if storage_ is not None and product_title:
-                storage_.setdefault("products", []).append(extracted_data)
-
-        except Exception as e:
-            logger.exception(f"[WARN] Failed to extract tile: {e}", exc_info=True)
-            continue
-
-    return results
-
-
-# NOTE: convert to async
-async def extract_all_pages(
-    ctx: BrowserContext, start_url: str, storage_: Optional[Response] = None
-):
-    all_results = []
-    page = await ctx.new_page()
-    visited = set()
-    visited.add(start_url)
-
-    # NOTE: WE DON'T WANT TO USE SYNC PLAYWRIGHT HOW CAN
-    # WE MAKE THIS STUFF WORK WITH OUR EXISTING CODE?
-    # LET IT RESUSE OUR EXISTING BROWSER BUT THE HANDLING OF
-    # OTHER PAGES SHOULD BE DONE IN PARALLEL IF POSSIBLE
-    #
-    print("[INFO] attempting to visit website")
-    await page.goto(start_url, timeout=60000, wait_until="domcontentloaded")
-    await page.wait_for_selector("div.product-tile", timeout=15000)
-
-    print("[INFO] page visit completed")
-    results = await extract_product_info_from_page(
-        page, visited=visited, storage_=storage_
-    )
-    all_results.extend(results)
-
-    # paginate through additional pages
-    pagination = await page.query_selector_all(".pagination-wrapper a:not(.next)")
-    hrefs = []
-
-    for anchor in pagination:
-        try:
-            href = await anchor.get_attribute("href")
-            if href:
-                # visited.add(href)
-                hrefs.append(href)
-        except Exception as e:
-            print(f"[WARN] Failed getting href from anchor: {e}")
-
-    for href in hrefs:
-        if href in visited:
-            print(f"[DEBUG] Skipping already visited: {href}")
-            continue
-        visited.add(href)
-
-        try:
-            print(f"Navigating to: {href}")
-            await page.goto(href, timeout=60000, wait_until="domcontentloaded")
-            results = await extract_product_info_from_page(
-                page,
-                visited=visited,  # type: ignore
-                storage_=storage_,
-            )
-            all_results.extend(results)
-        except Exception as e:
-            print(f"[WARN] Failed to visit pagination link: {href}: {e}")
-
-    await page.close()
-    return all_results
-
-
-# NOTE: WE DO NOT NEED THIS GUY, ITS OF NO IMPORTANCE TO US!
-async def scrape_product_tile_detail(
-    page: Page, entry: dict[str, Any], storage_: Optional[None] = None
-):
-    # OPERATION (PART 3)
-    url = entry.get("href")
-    if not url:
-        print("[!] Product Url not found or invalid")
-        return
-
-    print(f"[-> ] Visiting product page: {url}")
-    try:
-        # await extract_all_pages(page.context, url, storage_=storage_)
-        await page.goto(url, timeout=60000, wait_until="domcontentloaded")
-        await page.wait_for_selector("div.product-tile", timeout=15000)
-
-        results = await extract_product_info_from_page(page, storage_=storage_)
-
-        print(f"[✓] Scraped {len(results)} products from {url}")
-
-    except Exception as e:
-        print(f"[!] Failed extracting innerHTML from {url}: {e}")
-        logger.error(str(e), exc_info=True)
-
-
 async def entrypoint(page: Page, to_excel=False) -> None:
     print("[INFO] Attempting to perform scrapping...")
     scraped_data: Response = {}
-
-    # categories = await extract_categories_from_homepage(page, storage_=scraped_data)
 
     # OPERATION 1
     categories = await extract_categories_from_homepage(page)
@@ -609,24 +365,10 @@ async def entrypoint(page: Page, to_excel=False) -> None:
 
     print("[INFO] Completed Extract")
 
-    # for section in scraped_data["categories"]:
-    #     for subsection in section["subcategories"]:
-    #         await scrape_product_listing_index(
-    #             page, subsection["name"], subsection["url"], storage_=subsection
-    #         )
-
-    # let's run it in parralel
     # Operation 2
     await scrape_all_subcategory_indexes(page.context, scraped_data["categories"])
 
-    # OPERATION 3
-    #
-    # NOTE: we reuse the context from earlier, we would run this in parallel
-    # however, we want to goto each url of the indexes we have
-    # and extract every information of the "avaliable" products, manufacturer information,
-    # tags, etc
-    # we look through each and every product links of index_entries, and head out to the
-    # links on there
+    # OPERATION 3 + 4
     await scrape_product_overview(page.context, scraped_data["categories"])
 
     # print(f"[INFO] {scraped_data}")
