@@ -345,86 +345,14 @@ async def extract_product_link_from_tile(tile: ElementHandle) -> str | None:
     return None
 
 
-# async def extract_product_link_from_tile(tile):
-#     """
-#     Attempts to extract the product link from a product tile element using multiple strategies.
-#
-#     Either:
-#     - Direct refs
-#     - Through onClick refs
-#     - data-url/attributes refs
-#     - decorator links
-#     """
-#     # Look for a direct <a href="...">
-#     try:
-#         link_el = await tile.query_selector("a[href]")
-#         if link_el:
-#             href = await link_el.get_attribute("href")
-#             if href:
-#                 return href
-#     except Exception as e:
-#         print(f"[WARN] Failed to get href from direct a tag: {e}")
-#
-#     # Look for onclick handler with location.href
-#     try:
-#         onclick = await tile.get_attribute("onclick")
-#         if onclick and "location.href" in onclick:
-#             # Example format: onclick="location.href='/products/123'"
-#             parts = onclick.split("location.href=")
-#             if len(parts) > 1:
-#                 link_candidate = parts[1].strip("';\" ")
-#                 if link_candidate:
-#                     return link_candidate
-#     except Exception as e:
-#         pass
-#
-#     for attr in ["data-url", "data-href", "decorator"]:
-#         try:
-#             val = await tile.get_attribute(attr)
-#             if val:
-#                 if attr == "decorator" and "linkRender" in val:
-#                     return val.split("linkRender('")[1].split("'")[0]
-#                 return val
-#         except Exception as e:
-#             print(f"[WARN] Error reading {attr}: {e}")
-#
-# # Look for data-url or data-href attributes
-# data_link = await tile.get_attribute("data-url") or tile.get_attribute("data-href")
-# if data_link:
-#     return data_link
-#
-# # Fallback; If it has a custom attribute like decorator="linkRender('/path')"
-# decorator_attr = await tile.get_attribute("decorator")
-# if decorator_attr and "linkRender" in decorator_attr:
-#     try:
-#         return decorator_attr.split("linkRender('")[1].split("'")[0]
-#     except IndexError:
-#         pass
-
-# return None
-
-
-def extract_all_pages(ctx: BrowserContext, start_url: str):
-    """Meant for use for paginated pages in products overview page"""
-    all_results = []
-
-    page = ctx.new_page()
-    page.goto(start_url)
-    all_results.extend(extract_product_info_from_page(page))
-
-    # Paginate through additional pages
-    pagination = page.query_selector_all(".pagination-wrapper a:not(.next)")
-    visited = set()
-
-    for anchor in pagination:
-        href = anchor.get_attribute("href")
-        if href and href not in visited:
-            visited.add(href)
-            print(f"Navigating to: {href}")
-            page.goto(href)
-            all_results.extend(extract_product_info_from_page(page))
-
-    return all_results
+async def safe_inner_text(locator: Locator) -> str | None:
+    """Utility fn to help us safely access the inner text of a locator element without breaking the script"""
+    try:
+        if await locator.count() > 0:
+            return (await locator.inner_text()).strip()
+    except Exception:
+        pass
+    return None
 
 
 # TODO: refactor into composale functions
