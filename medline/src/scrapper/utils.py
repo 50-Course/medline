@@ -356,7 +356,18 @@ async def safe_inner_text(locator: Locator) -> str | None:
     return None
 
 
-async def is_valid_product_page(page: Page) -> bool:
+async def is_valid_product_page(
+    page: Page, logger_func: Optional[Callable] = None
+) -> bool:
     # we check if a product page is valid by searching for the product tile
-    title_block = page.locator('span[class^="sc-2mcr2-0"]')
-    return await title_block.count() > 0
+    # title_block = page.locator('span[class^="sc-2mcr2-0"]')
+    # return await title_block.count() > 0
+
+    product_url: str = page.url
+    homepage_url: str = "https://medicalexpo.com"
+    await page.wait_for_url(homepage_url)
+
+    if page.url != product_url:
+        logger_func(f"[DEBUG] Expected {homepage_url}, but got {page.url}")
+        return False
+    return True
