@@ -324,16 +324,16 @@ async def scrape_product_overview(
 
                         # I have just discovered some product link causes redirect breaking
                         # our `extract_product_data_async` logic
-                        if not await is_valid_product_page(
-                            page, logger_func=logger_func
-                        ):
-                            logger_func(
-                                f"[WARN] Product page appears to be invalid, removed or moved permanently: {product_url}"
-                            )
-                            logger_func(
-                                f"[SKIP] Soft 404 or placeholder page: {product_url}"
-                            )
-                            continue
+                        # if not await is_valid_product_page(
+                        #     page, logger_func=logger_func
+                        # ):
+                        #     logger_func(
+                        #         f"[WARN] Product page appears to be invalid, removed or moved permanently: {product_url}"
+                        #     )
+                        #     logger_func(
+                        #         f"[SKIP] Soft 404 or placeholder page: {product_url}"
+                        #     )
+                        #     continue
 
                         full_data = await extract_product_data_async(page)
                         full_product_details.append({**tile, **full_data})
