@@ -11,6 +11,7 @@ from playwright.sync_api import BrowserContext
 
 async def extract_product_data_async(page: Page) -> dict:
     data = {}
+    # await page.wait_for_load_state("networkidle")
 
     title, model = await _extract_product_title_and_model(page)
     data["title"] = title
@@ -63,8 +64,8 @@ async def extract_product_data_async(page: Page) -> dict:
 
 
 async def _extract_full_product_description(page: Page) -> str:
-    desc_element = page.locator("div.sc-3fi1by-0.hlEuXW")
-    await desc_element.wait_for(state="attached", timeout=60000)
+    desc_element = page.locator(".sc-3fi1by-0.hlEuXW")
+    # await desc_element.wait_for(state="attached", timeout=60000)
 
     description = await desc_element.inner_text()
     return description or "No description available"
@@ -78,6 +79,8 @@ async def _extract_product_title_and_model(page: Page) -> tuple[str | None, str 
 
     print("[INFO] Found title block")
     spans = await title_block.query_selector_all("span")
+
+    title, model = "Unknown Product Title", "Unknown Product Model"
 
     if len(spans) > 0:
         title = await spans[0].inner_text()
@@ -146,15 +149,10 @@ async def _extract_manufacturer_info(page: Page) -> dict:
     return manufacturer_data
 
 
-async def _extract_manufacturer_rating(page: Page) -> str:
-    manufacturer_rating = await page.query_selector(
-        "div.supplierDetails__Rating-sc-cmi9pt-9.bHmvOn"
-    )
-    return (
-        (await manufacturer_rating.inner_text()).strip()
-        if manufacturer_rating
-        else "No rating"
-    )
+async def _extract_manufacturer_rating(page: Page) -> int:
+    man_selector = "xpath=//div[contains(@class, 'supplierDetails__RatingDetails-sc-cmi9pt-12 dVOoeb rating')]//span[contains(@style, 'visibility: hidden')]"
+    man_rating = page.locator(man_selector)
+    return await man_rating.count()
 
 
 async def _extract_product_img_urls(page: Page) -> list:
@@ -200,7 +198,8 @@ async def _extract_product_price(
 
 async def run_playwright():
     product_url: str = (
-        "https://www.medicalexpo.com/prod/tunturi/product-122229-856618.html"
+        # "https://www.medicalexpo.com/prod/tunturi/product-122229-856618.html"
+        "https://www.medicalexpo.com/prod/vitrex-medical-s/product-110882-954642.html"  # product link with catalog
     )
     async with async_playwright() as p:
         browser = await p.firefox.launch(headless=True)
@@ -212,6 +211,7 @@ async def run_playwright():
 
         if product_data:
             print(f"[INFO] Successfully scrapped product: {product_url}")
+            # print(product_data)
 
 
 asyncio.run(run_playwright(), debug=True)
