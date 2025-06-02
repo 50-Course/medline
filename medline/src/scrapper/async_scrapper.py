@@ -19,35 +19,24 @@ from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
 from src.scrapper.scrape_product_data_async import extract_product_data_async
-from src.scrapper.scrape_product_tiles_async import scrape_product_overview_tiles
+from src.scrapper.scrape_product_tiles_async import \
+    scrape_product_overview_tiles
 
-from .constants import (
-    SELECTOR_CATEGORY_ITEM,
-    SELECTOR_CATEGORY_LABEL,
-    SELECTOR_CATEGORY_LABEL_SAFE,
-    SELECTOR_HOMEPAGE_PRODUCTS_COLUMN,
-    SELECTOR_INDEX_ENTRY_IMAGE,
-    SELECTOR_INDEX_ENTRY_ITEM,
-    SELECTOR_INDEX_ENTRY_LINK,
-    SELECTOR_INDEX_ENTRY_TITLE,
-    SELECTOR_INDEX_LIST_CONTAINER,
-    SELECTOR_INDEX_PAGE_HEADER,
-    SELECTOR_PRODUCTS_INNERMOST_CONTAINER,
-    SELECTOR_SUBCATEGORY_LINK,
-    SELECTOR_SUBCATEGORY_LINK_SAFE,
-)
+from .constants import (SELECTOR_CATEGORY_ITEM, SELECTOR_CATEGORY_LABEL,
+                        SELECTOR_CATEGORY_LABEL_SAFE,
+                        SELECTOR_HOMEPAGE_PRODUCTS_COLUMN,
+                        SELECTOR_INDEX_ENTRY_IMAGE, SELECTOR_INDEX_ENTRY_ITEM,
+                        SELECTOR_INDEX_ENTRY_LINK, SELECTOR_INDEX_ENTRY_TITLE,
+                        SELECTOR_INDEX_LIST_CONTAINER,
+                        SELECTOR_INDEX_PAGE_HEADER,
+                        SELECTOR_PRODUCTS_INNERMOST_CONTAINER,
+                        SELECTOR_SUBCATEGORY_LINK,
+                        SELECTOR_SUBCATEGORY_LINK_SAFE)
 from .constants import _ResponseData as Response
-from .utils import (
-    browser_context,
-    extract_product_link_from_tile,
-    fallback_locator,
-    get_random_user_agent,
-    goto_with_retry,
-    human_delay,
-    is_valid_product_page,
-    retry_with_backoff,
-    write_category_to_excel,
-)
+from .utils import (browser_context, extract_product_link_from_tile,
+                    fallback_locator, get_random_user_agent, goto_with_retry,
+                    human_delay, is_valid_product_page, retry_with_backoff,
+                    write_category_to_excel)
 
 logger = logging.getLogger(__name__)
 
@@ -293,8 +282,12 @@ async def extract_categories_from_homepage(
 
 
 async def scrape_product_overview(
-    ctx: BrowserContext, categories: List[Dict[str, Any]]
+    ctx: BrowserContext,
+    categories: List[Dict[str, Any]],
+    logger_func: Optional[Callable] = None,
 ):
+    logger_func = logger_func or print
+
     sem = asyncio.Semaphore(5)
 
     entries_to_scrape = [
@@ -331,11 +324,15 @@ async def scrape_product_overview(
 
                         # I have just discovered some product link causes redirect breaking
                         # our `extract_product_data_async` logic
-                        if not await is_valid_product_page(page):
-                            print(
+                        if not await is_valid_product_page(
+                            page, logger_func=logger_func
+                        ):
+                            logger_func(
                                 f"[WARN] Product page appears to be invalid, removed or moved permanently: {product_url}"
                             )
-                            print(f"[SKIP] Soft 404 or placeholder page: {product_url}")
+                            logger_func(
+                                f"[SKIP] Soft 404 or placeholder page: {product_url}"
+                            )
                             continue
 
                         full_data = await extract_product_data_async(page)
