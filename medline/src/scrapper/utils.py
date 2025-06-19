@@ -3,7 +3,7 @@ import random
 from contextlib import asynccontextmanager
 from logging import Logger
 from pathlib import Path
-from typing import Annotated, Any, Callable, Dict, List, Optional
+from typing import Annotated, Any, Callable, Dict, Iterable, List, Optional
 
 from bs4 import BeautifulSoup
 from openpyxl import Workbook
@@ -371,3 +371,61 @@ async def is_valid_product_page(
         logger_func(f"[DEBUG] Expected {homepage_url}, but got {page.url}")
         return False
     return True
+
+
+def chunk_workload(dataset, size: int | None = None):
+    """
+    Utility function to chunk any iterable, such as tile data or list of product links
+    or anything iterable such that we may do parrallel processing on it
+    """
+    import itertools
+
+    if not size:
+        size = len(dataset) // 2
+
+    it = iter(dataset)
+    while chunk := list(itertools.islice(it, size)):
+        yield chunk
+
+
+def process_parallel(
+    dataset, chunk_size: int, process_function: Callable
+):
+    """
+    Processes data in parallel using multiprocessing.
+
+    Args:
+    - dataset: Iterable data (e.g., list of categories or tiles).
+    - chunk_size: Size of chunks to split the dataset.
+    - process_function: The function to apply on each chunk.
+
+    Returns:
+    - The processed results from each chunk.
+    """
+    import multiprocessing as mp
+
+    num_workers = mp.cpu_count()
+
+    # use all available cpu cores
+    with mp.Pool(processes=num_workers) as pool:
+        for result_chunk in pool.imap(process_function, chunk_workload(dataset, chunk_size))
+            handle_processed_result(result_chunk)
+
+
+def process_chunk(chunk: Iterable, fn: Callable):
+    """
+    Utility function to apply a function or callback onto a chunked piece of data
+
+    For example this would take an existing function of ours, and apply it to each element in the chunk
+
+    for example: extracting tile information from a specific tile in a chunk, or extracting specific product information
+    from a chunk of product links
+    """
+    pass
+
+
+def handle_processed_result(result_chunk):
+    """
+    Utility function to handle the processing of all the processed results
+    """
+    pass
